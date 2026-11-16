@@ -102,7 +102,7 @@ button { cursor: pointer; }
 /* Bottom nav */
 .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line);
   padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
-.nav-inner { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.nav-inner { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .nav button { border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: var(--muted); }
 .nav button[aria-current="page"] { color: var(--accent); font-weight: 700; }
 .fab { position: fixed; z-index: 15; right: max(20px, calc(50% - 240px)); bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 28px; border: none; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
@@ -248,6 +248,8 @@ var DEFAULT_SETTINGS = {
     { name: '洗濯', min: 45 }, { name: '掃除機', min: 20 }, { name: '料理', min: 40 }, { name: '皿洗い', min: 15 }, { name: 'ゴミ出し', min: 5 },
     { name: '風呂掃除', min: 20 }, { name: 'トイレ掃除', min: 10 }, { name: '買い物', min: 60 }, { name: '布団干し', min: 10 }, { name: 'アイロン', min: 30 }
   ],
+  diet: { goalWeight: null },
+  foods: [],
   cats: [
     { id: 'work', name: '仕事', color: '#8A93A3', rule: 'pick', allow: ['work'] },
     { id: 'house', name: '家事', color: '#B08A6A', rule: 'pick', allow: ['house'] },
@@ -263,7 +265,7 @@ var DEFAULT_SETTINGS = {
   ]
 };
 var PALETTE = ['#8A93A3', '#B08A6A', '#ACAFD4', '#5A5FAA', '#6DB58A', '#EE9AC0', '#E8C55A', '#E07A7A', '#A48BD6', '#7EC8E8', '#BDB7B0', '#F0A86E'];
-function emptyDay(date) { return { date: date, events: [], tasks: [], actuals: [], wake: null, bed: null, note: '', workOff: null }; }
+function emptyDay(date) { return { date: date, events: [], tasks: [], actuals: [], wake: null, bed: null, note: '', workOff: null, meals: [], weight: null, steps: null }; }
 function fillSettings(s) {
   var d = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
   if (!s) return d;
@@ -271,7 +273,9 @@ function fillSettings(s) {
     work: Object.assign(d.work, s.work || {}),
     goal: { weekday: Object.assign(d.goal.weekday, (s.goal || {}).weekday || {}), holiday: Object.assign(d.goal.holiday, (s.goal || {}).holiday || {}) },
     chores: Array.isArray(s.chores) ? s.chores : d.chores,
-    cats: Array.isArray(s.cats) && s.cats.length ? s.cats : d.cats
+    cats: Array.isArray(s.cats) && s.cats.length ? s.cats : d.cats,
+    diet: Object.assign({ goalWeight: null }, s.diet || {}),
+    foods: Array.isArray(s.foods) ? s.foods : []
   };
 }
 
@@ -458,6 +462,7 @@ var I = {
   home: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>`,
   cal: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>`,
   clock: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>`,
+  heart: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20s-7-4.4-9-9.2C1.7 7.6 3.8 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.2 0 5.3 3.1 4 6.3C19 15.6 12 20 12 20z"></path><path d="M7 12h2.5l1.5-2.5 2 5 1.5-2.5H17"></path></svg>`,
   list: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"></path><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11"></path><circle cx="5" cy="18" r="1.5"></circle></svg>`
 };
 var ART = {
@@ -591,6 +596,20 @@ function Home(props) {
         <span class="muted" style="font-size:11px">家事 ${stats.choreDone}/${stats.choreTotal}・ToDo ${stats.todoDone}/${stats.todoTotal}</span>
       </button>
     </div>
+    ${(function () {
+      var w = typeof day.weight === 'number' ? day.weight : null, st2 = typeof day.steps === 'number' ? day.steps : null, kc = kcalOf(day);
+      var gw = settings.diet && typeof settings.diet.goalWeight === 'number' ? settings.diet.goalWeight : null;
+      var lw = latestWeight(s.days, t);
+      return html`<button class="card" style="border:none;text-align:left;gap:8px" onClick=${props.onDiet}>
+        <span class="between label">ダイエット<span style="color:var(--accent);font-weight:700">記録 ›</span></span>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+          <span class="stack" style="gap:0"><span class="muted" style="font-size:11px">体重</span><span class="num" style="font-size:18px;font-weight:600">${w != null ? w.toFixed(1) : '--'}<span style="font-size:12px">kg</span></span>
+            ${gw != null && lw && html`<span class="muted" style="font-size:10px">${lw.value - gw > 0 ? '目標まで ' + (lw.value - gw).toFixed(1) + 'kg' : '目標達成'}</span>`}</span>
+          <span class="stack" style="gap:0"><span class="muted" style="font-size:11px">歩数</span><span class="num" style="font-size:18px;font-weight:600">${st2 != null ? st2.toLocaleString('ja-JP') : '--'}</span></span>
+          <span class="stack" style="gap:0"><span class="muted" style="font-size:11px">カロリー</span><span class="num" style="font-size:18px;font-weight:600">${kc != null ? kc.toLocaleString('ja-JP') : '--'}</span><span class="muted" style="font-size:10px">食事 ${mealsOf(day).length}件</span></span>
+        </div>
+      </button>`;
+    })()}
     <div class="card">
       <div class="between"><span class="h2">今日の予定</span><span class="muted" style="font-size:12px">${events.length}件</span></div>
       ${events.length ? events.map(function (e) {
@@ -1317,8 +1336,8 @@ function SleepLog(props) {
   var yv = function (v) { return H - v / maxV * H; };
   var goalS = useState(false);
 
-  return html`<div class="app">
-    <div class="top"><div class="row" style="gap:4px;margin-left:-10px"><button class="iconbtn plain" aria-label="戻る" onClick=${props.onBack}>${I.back}</button><h1 style="margin:0;font-size:20px">睡眠の記録</h1></div></div>
+  return html`<div class=${props.embedded ? 'stack' : 'app'} style=${props.embedded ? 'gap:14px' : ''}>
+    ${!props.embedded && html`<div class="top"><div class="row" style="gap:4px;margin-left:-10px"><button class="iconbtn plain" aria-label="戻る" onClick=${props.onBack}>${I.back}</button><h1 style="margin:0;font-size:20px">睡眠の記録</h1></div></div>`}
     <${Seg} label="期間" value=${mode} onChange=${function (m) { modeS[1](m); anchorS[1](todayStr()); }} options=${[['week', '週'], ['month', '月'], ['year', '年']]} />
     <div class="between"><button class="iconbtn plain" aria-label="前へ" onClick=${function () { shift(-1); }}>‹</button><span style="font-size:14px;font-weight:500;text-align:center">${label}</span><button class="iconbtn plain" aria-label="次へ" onClick=${function () { shift(1); }}>›</button></div>
     <div class="card">
@@ -1389,6 +1408,299 @@ function GoalSheet(props) {
     </div>
     <div class="between" style="padding:0 4px"><span style="font-size:13px;color:var(--fg-2)">目標の睡眠時間</span><span class="big" style="font-size:24px">${dur(m)}</span></div>
     <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" onClick=${function () { var n = vals[0]; props.store.setSettings(function (st) { st.goal = n; return st; }); props.toast('睡眠の目標を保存しました'); props.onClose(); }}>保存</button></div>
+  </${Sheet}>`;
+}
+
+/* ---------- ヘルス（睡眠・ダイエット） ---------- */
+var MEAL_SLOTS = [['breakfast', '朝食'], ['lunch', '昼食'], ['dinner', '夕食'], ['snack', '間食']];
+function mealsOf(day) { return (day && day.meals) || []; }
+function kcalOf(day) {
+  var list = mealsOf(day).filter(function (m) { return typeof m.kcal === 'number'; });
+  return list.length ? list.reduce(function (a, m) { return a + m.kcal; }, 0) : null;
+}
+function metricValue(days, date, metric) {
+  var d = days[date];
+  if (!d) return null;
+  if (metric === 'weight') return typeof d.weight === 'number' ? d.weight : null;
+  if (metric === 'steps') return typeof d.steps === 'number' ? d.steps : null;
+  return kcalOf(d);
+}
+function fmtMetric(v, metric) {
+  if (v == null) return '--';
+  if (metric === 'weight') return (Math.round(v * 10) / 10).toFixed(1) + 'kg';
+  if (metric === 'steps') return Math.round(v).toLocaleString('ja-JP') + '歩';
+  return Math.round(v).toLocaleString('ja-JP') + 'kcal';
+}
+function fmtDiff(d, metric) {
+  if (d == null) return '';
+  var s = d > 0 ? '+' : d < 0 ? '−' : '±';
+  var a = Math.abs(d);
+  if (metric === 'weight') return s + (Math.round(a * 10) / 10).toFixed(1) + 'kg';
+  if (metric === 'steps') return s + Math.round(a).toLocaleString('ja-JP') + '歩';
+  return s + Math.round(a).toLocaleString('ja-JP') + 'kcal';
+}
+function latestWeight(days, upTo) {
+  for (var i = 0; i < 400; i++) { var d = addDays(upTo, -i), v = metricValue(days, d, 'weight'); if (v != null) return { value: v, date: d }; }
+  return null;
+}
+
+function Health(props) {
+  return html`<div class="app">
+    <div class="top"><h1 style="margin:0;font-size:22px">ヘルス</h1><${Gear} onClick=${props.onGear} /></div>
+    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['sleep', '睡眠'], ['diet', 'ダイエット']]} />
+    ${props.sub === 'sleep' ? html`<${SleepLog} ...${props} embedded=${true} />` : html`<${Diet} ...${props} />`}
+  </div>`;
+}
+
+function MetricChart(props) {
+  // props: bars [{label, value, today}], metric, goal, avg, mode
+  var metric = props.metric, bars = props.bars, H = 170;
+  var vals = bars.map(function (b) { return b.value; }).filter(function (v) { return v != null; });
+  var isLine = metric === 'weight';
+  var lo, hi;
+  if (isLine) {
+    var pool = vals.concat(props.goal != null ? [props.goal] : []);
+    if (!pool.length) pool = [60];
+    lo = Math.floor(Math.min.apply(null, pool) - 1); hi = Math.ceil(Math.max.apply(null, pool) + 1);
+    if (hi - lo < 4) { var mid = (hi + lo) / 2; lo = Math.floor(mid - 2); hi = Math.ceil(mid + 2); }
+  } else {
+    lo = 0; hi = Math.max.apply(null, vals.concat([props.goal || 0, metric === 'steps' ? 8000 : 2000]));
+    hi = Math.ceil(hi * 1.1 / (metric === 'steps' ? 2000 : 500)) * (metric === 'steps' ? 2000 : 500);
+  }
+  var yv = function (v) { return H - (v - lo) / (hi - lo) * H; };
+  var ticks = [];
+  var stepT = isLine ? Math.max(1, Math.round((hi - lo) / 4)) : (hi / 4);
+  for (var t = lo; t <= hi + 0.001; t += stepT) ticks.push(t);
+  var n = bars.length;
+  var pts = [];
+  bars.forEach(function (b, i) { if (b.value != null) pts.push([(i + 0.5) / n * 100, yv(b.value)]); });
+  var tickLabel = function (v) { return isLine ? v + '' : metric === 'steps' ? (v >= 1000 ? Math.round(v / 1000) + '千' : Math.round(v)) : Math.round(v); };
+  var gap = n > 12 ? 2 : 6;
+  return html`<div class="stack" style="gap:6px">
+    <div class="row" style="gap:14px;font-size:11px;color:var(--fg-2);padding-left:4px">
+      ${props.goal != null && html`<span class="row" style="gap:4px"><span style="width:14px;border-top:2px dashed var(--now)"></span>目標</span>`}
+      ${props.avg != null && html`<span class="row" style="gap:4px"><span style="width:14px;border-top:2px solid var(--fg)"></span>平均</span>`}
+    </div>
+    <div class="row" style="gap:6px;align-items:flex-start">
+      <div style=${'position:relative;width:30px;flex:none;height:' + H + 'px'} class="num">
+        ${ticks.map(function (v) { return html`<span style=${'position:absolute;right:0;font-size:10px;color:var(--muted);top:' + (yv(v) - 7) + 'px'}>${tickLabel(v)}</span>`; })}
+      </div>
+      <div style=${'position:relative;flex-grow:1;min-width:0;height:' + H + 'px;border-bottom:1px solid var(--line)'}>
+        ${ticks.map(function (v) { return html`<div style=${'position:absolute;left:0;right:0;border-top:1px solid var(--line-2);top:' + yv(v) + 'px'}></div>`; })}
+        ${isLine ? html`
+          <svg viewBox=${'0 0 100 ' + H} preserveAspectRatio="none" style=${'position:absolute;inset:0;width:100%;height:' + H + 'px;overflow:visible'} aria-hidden="true">
+            ${pts.length > 1 && html`<polyline points=${pts.map(function (p) { return p[0] + ',' + p[1]; }).join(' ')} fill="none" stroke="var(--accent)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"></polyline>`}
+          </svg>
+          ${bars.map(function (b, i) { return b.value != null && html`<span title=${fmtMetric(b.value, metric)} style=${'position:absolute;width:' + (b.today ? 10 : 7) + 'px;height:' + (b.today ? 10 : 7) + 'px;border-radius:50%;background:' + (b.today ? 'var(--accent)' : 'var(--surface)') + ';border:2px solid var(--accent);transform:translate(-50%,-50%);left:' + ((i + 0.5) / n * 100) + '%;top:' + yv(b.value) + 'px'}></span>`; })}`
+        : html`<div style=${'position:absolute;inset:0;display:grid;align-items:end;gap:' + gap + 'px;grid-template-columns:repeat(' + n + ',minmax(0,1fr))'}>
+            ${bars.map(function (b) { return html`<div style="display:flex;justify-content:center;align-items:flex-end;height:100%"><div title=${b.value != null ? fmtMetric(b.value, metric) : '記録なし'} style=${'width:100%;max-width:22px;border-radius:5px 5px 0 0;height:' + (b.value ? (b.value - lo) / (hi - lo) * H : 0) + 'px;background:' + (b.today ? 'var(--accent)' : '#ACAFD4')}></div></div>`; })}
+          </div>`}
+        ${props.goal != null && props.goal >= lo && props.goal <= hi && html`<div style=${'position:absolute;left:0;right:0;border-top:2px dashed var(--now);top:' + yv(props.goal) + 'px'}></div>`}
+        ${props.avg != null && html`<div style=${'position:absolute;left:0;right:0;border-top:2px solid var(--fg);opacity:.75;top:' + yv(props.avg) + 'px'}></div>`}
+      </div>
+    </div>
+    <div class="row" style="gap:6px">
+      <div style="width:30px;flex:none"></div>
+      <div style=${'flex-grow:1;min-width:0;display:grid;text-align:center;gap:' + gap + 'px;grid-template-columns:repeat(' + n + ',minmax(0,1fr))'}>
+        ${bars.map(function (b) { return html`<span class="stack" style="gap:1px;min-width:0"><span style="font-size:11px;font-weight:500;white-space:nowrap">${b.label}</span>${props.mode === 'week' && html`<span class="num" style="font-size:9px;color:var(--fg-2);white-space:nowrap">${b.value != null ? (metric === 'weight' ? b.value.toFixed(1) : metric === 'steps' ? (b.value >= 1000 ? (b.value / 1000).toFixed(1) + '千' : b.value) : Math.round(b.value)) : '-'}</span>`}</span>`; })}
+      </div>
+    </div>
+  </div>`;
+}
+
+function Diet(props) {
+  var s = props.store.state, settings = s.settings;
+  var dateS = useState(todayStr()), date = dateS[0];
+  var day = getDay(s.days, date), prev = getDay(s.days, addDays(date, -1));
+  var meals = mealsOf(day);
+  var sheet = useState(null);
+  var metricS = useState('weight'), metric = metricS[0];
+  var modeS = useState('week'), mode = modeS[0];
+  var anchorS = useState(todayStr()), anchor = anchorS[0];
+  var goal = settings.diet && typeof settings.diet.goalWeight === 'number' ? settings.diet.goalWeight : null;
+  var t = todayStr();
+
+  var lw = latestWeight(s.days, date);
+  var weightPrevDiff = typeof day.weight === 'number' && typeof prev.weight === 'number' ? day.weight - prev.weight : null;
+  var stepsPrevDiff = typeof day.steps === 'number' && typeof prev.steps === 'number' ? day.steps - prev.steps : null;
+  var kcal = kcalOf(day);
+
+  function range(m, a) {
+    if (m === 'week') { var l = []; for (var i = 6; i >= 0; i--) l.push(addDays(a, -i)); return l; }
+    var d = parse(a), y = d.getFullYear(), mo = d.getMonth(), n = new Date(y, mo + 1, 0).getDate(), r = [];
+    for (var k = 1; k <= n; k++) r.push(ymd(new Date(y, mo, k)));
+    return r;
+  }
+  function shift(n) {
+    if (mode === 'week') anchorS[1](addDays(anchor, 7 * n));
+    else if (mode === 'month') { var d = parse(anchor); anchorS[1](ymd(new Date(d.getFullYear(), d.getMonth() + n, 1))); }
+    else { var d2 = parse(anchor); anchorS[1](ymd(new Date(d2.getFullYear() + n, 0, 1))); }
+  }
+  var bars = [], label = '', cur = [], prevVals = [];
+  if (mode === 'year') {
+    var yr = parse(anchor).getFullYear(); label = yr + '年';
+    for (var mo = 0; mo < 12; mo++) {
+      var vs = range('month', ymd(new Date(yr, mo, 1))).map(function (d) { return metricValue(s.days, d, metric); }).filter(function (v) { return v != null; });
+      bars.push({ label: String(mo + 1), value: avg(vs), today: yr === new Date().getFullYear() && mo === new Date().getMonth() });
+      cur = cur.concat(vs);
+    }
+    for (var pm = 0; pm < 12; pm++) prevVals = prevVals.concat(range('month', ymd(new Date(yr - 1, pm, 1))).map(function (d) { return metricValue(s.days, d, metric); }).filter(function (v) { return v != null; }));
+  } else {
+    var dates = range(mode, anchor);
+    label = mode === 'week' ? jpDate(dates[0]) + ' 〜 ' + jpDate(dates[6]) : parse(anchor).getFullYear() + '年' + (parse(anchor).getMonth() + 1) + '月';
+    dates.forEach(function (d, i) {
+      var v = metricValue(s.days, d, metric);
+      bars.push({ label: mode === 'week' ? DOW[parse(d).getDay()] : (i % 5 === 0 || i === dates.length - 1 ? String(parse(d).getDate()) : ''), value: v, today: d === t });
+      if (v != null) cur.push(v);
+    });
+    var pd = mode === 'week' ? range('week', addDays(anchor, -7)) : range('month', ymd(new Date(parse(anchor).getFullYear(), parse(anchor).getMonth() - 1, 1)));
+    prevVals = pd.map(function (d) { return metricValue(s.days, d, metric); }).filter(function (v) { return v != null; });
+  }
+  var curAvg = avg(cur), prevAvg = avg(prevVals);
+  var periodName = mode === 'week' ? '前週' : mode === 'month' ? '前月' : '前年';
+  // 体重は減るとよい、歩数は増えるとよい、カロリーは評価しない
+  function tone(d) { if (d == null || metric === 'kcal') return ''; var good = metric === 'weight' ? d <= 0 : d >= 0; return good ? 'chip-good' : 'chip-bad'; }
+
+  function saveNumber(field, v) {
+    props.store.setDay(date, function (d) { d[field] = v; return d; });
+  }
+
+  return html`<div class="stack" style="gap:14px">
+    <div class="between">
+      <div class="datenav">
+        <button class="iconbtn plain" aria-label="前の日" onClick=${function () { dateS[1](addDays(date, -1)); }}>‹</button>
+        <span class="title" style="font-size:18px">${jpDate(date)}</span>
+        <button class="iconbtn plain" aria-label="次の日" onClick=${function () { dateS[1](addDays(date, 1)); }}>›</button>
+        ${date !== t && html`<button class="todaybtn" onClick=${function () { dateS[1](t); }}>今日</button>`}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <button class="card" style="border:none;text-align:left;gap:4px" onClick=${function () { sheet[1]({ type: 'weight' }); }}>
+        <span class="between label">体重<span style="color:var(--accent);font-weight:700">${typeof day.weight === 'number' ? '編集' : '入力'}</span></span>
+        <span class="big">${typeof day.weight === 'number' ? html`${day.weight.toFixed(1)}<small>kg</small>` : '--'}</span>
+        ${weightPrevDiff != null && html`<span style="font-size:12px;font-weight:500" class=${weightPrevDiff <= 0 ? 't-good' : 't-bad'}>前日より ${fmtDiff(weightPrevDiff, 'weight')}</span>`}
+        ${goal != null && lw && html`<span class="muted" style="font-size:12px">目標 ${goal.toFixed(1)}kg まで ${lw.value - goal > 0 ? 'あと ' + (lw.value - goal).toFixed(1) + 'kg' : '達成！'}</span>`}
+        ${goal == null && html`<span class="muted" style="font-size:11px">目標体重は下の「目標を設定」から</span>`}
+      </button>
+      <button class="card" style="border:none;text-align:left;gap:4px" onClick=${function () { sheet[1]({ type: 'steps' }); }}>
+        <span class="between label">歩数<span style="color:var(--accent);font-weight:700">${typeof day.steps === 'number' ? '編集' : '入力'}</span></span>
+        <span class="big">${typeof day.steps === 'number' ? html`${day.steps.toLocaleString('ja-JP')}<small>歩</small>` : '--'}</span>
+        ${stepsPrevDiff != null && html`<span style="font-size:12px;font-weight:500" class=${stepsPrevDiff >= 0 ? 't-good' : 't-bad'}>前日より ${fmtDiff(stepsPrevDiff, 'steps')}</span>`}
+        <span class="muted" style="font-size:11px">iPhoneのヘルスケアの歩数を入力</span>
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="between"><span class="h2">食事</span><span class="muted" style="font-size:12px">${kcal != null ? '合計 ' + kcal.toLocaleString('ja-JP') + 'kcal' : meals.length + '件'}</span></div>
+      ${MEAL_SLOTS.map(function (slot) {
+        var list = meals.filter(function (m) { return m.slot === slot[0]; });
+        var sub = list.filter(function (m) { return typeof m.kcal === 'number'; }).reduce(function (a, m) { return a + m.kcal; }, 0);
+        return html`<div class="stack" style="gap:6px;border-top:1px solid var(--line-2);padding-top:10px">
+          <div class="between"><span style="font-size:13px;font-weight:700;color:var(--fg-2)">${slot[1]}${sub ? html`<span class="num muted" style="font-weight:500;margin-left:8px;font-size:12px">${sub}kcal</span>` : ''}</span>
+            <button class="btn small ghost" style="padding:4px 12px" onClick=${function () { sheet[1]({ type: 'meal', slot: slot[0], item: null }); }}>＋ 追加</button></div>
+          ${list.length ? list.map(function (m) {
+            return html`<button class="between" style="border:none;background:var(--surface-2);border-radius:10px;padding:8px 12px;text-align:left" onClick=${function () { sheet[1]({ type: 'meal', slot: slot[0], item: m }); }}>
+              <span style="font-size:14px;min-width:0;overflow-wrap:anywhere">${m.name}</span>
+              <span class="num muted" style="font-size:12px;white-space:nowrap">${typeof m.kcal === 'number' ? m.kcal + 'kcal' : ''}</span>
+            </button>`;
+          }) : html`<span class="muted" style="font-size:12px">まだ記録していません</span>`}
+        </div>`;
+      })}
+      <p class="muted" style="font-size:11px;margin:0">カロリーは書かなくても保存できます。わからないときは、写真をClaudeに送ると目安を計算してもらえます。</p>
+    </div>
+
+    <div class="card" style="padding:14px 12px 12px">
+      <${Seg} label="グラフの項目" value=${metric} onChange=${metricS[1]} options=${[['weight', '体重'], ['steps', '歩数'], ['kcal', 'カロリー']]} />
+      <${Seg} label="期間" value=${mode} onChange=${function (m) { modeS[1](m); anchorS[1](todayStr()); }} options=${[['week', '週'], ['month', '月'], ['year', '年']]} />
+      <div class="between"><button class="iconbtn plain" aria-label="前へ" onClick=${function () { shift(-1); }}>‹</button><span style="font-size:13px;font-weight:500;text-align:center">${label}</span><button class="iconbtn plain" aria-label="次へ" onClick=${function () { shift(1); }}>›</button></div>
+      <div class="stack" style="gap:6px;padding:0 4px">
+        <span class="label">${mode === 'week' ? 'この週' : mode === 'month' ? 'この月' : 'この年'}の平均</span>
+        <span class="big" style="font-size:28px">${fmtMetric(curAvg, metric)}</span>
+        <div class="chips" style="gap:6px">
+          ${curAvg != null && prevAvg != null && html`<span class=${tone(curAvg - prevAvg) || 'chip-good'} style=${metric === 'kcal' ? 'background:var(--accent-soft);color:var(--fg)' : ''}>${periodName}の平均より ${fmtDiff(curAvg - prevAvg, metric)}</span>`}
+          ${metric === 'weight' && goal != null && curAvg != null && html`<span class=${curAvg <= goal ? 'chip-good' : 'chip-bad'}>目標より ${fmtDiff(curAvg - goal, 'weight')}</span>`}
+          ${curAvg == null && html`<span class="muted" style="font-size:12px">この期間の記録はまだありません。</span>`}
+        </div>
+      </div>
+      <${MetricChart} bars=${bars} metric=${metric} mode=${mode} goal=${metric === 'weight' ? goal : null} avg=${curAvg} />
+      ${mode === 'year' && html`<span class="muted" style="font-size:11px;padding-left:4px">月ごとの平均です</span>`}
+      ${metric === 'kcal' && html`<span class="muted" style="font-size:11px;padding-left:4px">カロリーを書いた日だけ集計します</span>`}
+      <button class="btn small ghost" style="align-self:flex-start" onClick=${function () { sheet[1]({ type: 'goal' }); }}>${goal != null ? '目標体重 ' + goal.toFixed(1) + 'kg を変更' : '目標体重を設定'}</button>
+    </div>
+
+    ${sheet[0] && sheet[0].type === 'meal' && html`<${MealSheet} key=${'m' + (sheet[0].item ? sheet[0].item.id : 'new') + sheet[0].slot} settings=${settings} date=${date} slot=${sheet[0].slot} item=${sheet[0].item} store=${props.store} toast=${props.toast} onClose=${function () { sheet[1](null); }} />`}
+    ${sheet[0] && sheet[0].type === 'weight' && html`<${NumberSheet} title=${jpDate(date) + 'の体重'} label="体重" unit="kg" step="0.1" decimal=${true} value=${day.weight} placeholder=${lw ? lw.value.toFixed(1) : '60.0'}
+      onSave=${function (v) { saveNumber('weight', v); props.toast('体重を記録しました'); }} onClear=${function () { saveNumber('weight', null); }} onClose=${function () { sheet[1](null); }} />`}
+    ${sheet[0] && sheet[0].type === 'steps' && html`<${NumberSheet} title=${jpDate(date) + 'の歩数'} label="歩数" unit="歩" step="1" decimal=${false} value=${day.steps} placeholder="8000" note="iPhoneの「ヘルスケア」→「歩数」で、その日の合計を見て入力します。"
+      onSave=${function (v) { saveNumber('steps', Math.round(v)); props.toast('歩数を記録しました'); }} onClear=${function () { saveNumber('steps', null); }} onClose=${function () { sheet[1](null); }} />`}
+    ${sheet[0] && sheet[0].type === 'goal' && html`<${NumberSheet} title="目標体重" label="目標体重" unit="kg" step="0.1" decimal=${true} value=${goal} placeholder="55.0"
+      onSave=${function (v) { props.store.setSettings(function (st) { st.diet = Object.assign({}, st.diet, { goalWeight: v }); return st; }); props.toast('目標体重を保存しました'); }}
+      onClear=${function () { props.store.setSettings(function (st) { st.diet = Object.assign({}, st.diet, { goalWeight: null }); return st; }); }} onClose=${function () { sheet[1](null); }} />`}
+  </div>`;
+}
+
+function NumberSheet(props) {
+  var f = useState(props.value != null ? String(props.value) : '');
+  var num = parseFloat(String(f[0]).replace(',', '.'));
+  var ok = !isNaN(num) && num > 0;
+  function save() { if (!ok) return; props.onSave(props.decimal ? Math.round(num * 10) / 10 : Math.round(num)); props.onClose(); }
+  return html`<${Sheet} title=${props.title} onClose=${props.onClose}>
+    <h2 class="h2" style="font-size:18px">${props.title}</h2>
+    ${props.note && html`<p class="muted" style="margin:0;font-size:12px;line-height:1.6">${props.note}</p>`}
+    <div class="row" style="gap:10px">
+      <label class="sr" for="num-in">${props.label}</label>
+      <input id="num-in" class="input num" style="font-size:24px;font-weight:600;text-align:right" type="number" inputmode=${props.decimal ? 'decimal' : 'numeric'} step=${props.step} min="0"
+        value=${f[0]} placeholder=${props.placeholder} onInput=${function (e) { f[1](e.target.value); }} onKeyDown=${function (e) { if (e.key === 'Enter') save(); }} />
+      <span style="font-size:16px;font-weight:700">${props.unit}</span>
+    </div>
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" style=${ok ? '' : 'opacity:.5'} onClick=${save}>保存</button></div>
+    ${props.value != null && html`<button class="btn danger" onClick=${function () { props.onClear(); props.onClose(); }}>記録を消す</button>`}
+  </${Sheet}>`;
+}
+
+function MealSheet(props) {
+  var settings = props.settings, foods = settings.foods || [];
+  var item = props.item;
+  var f = useState({ slot: item ? item.slot : props.slot, name: item ? item.name : '', kcal: item && typeof item.kcal === 'number' ? String(item.kcal) : '' });
+  var v = f[0], set = function (k, val) { var n = Object.assign({}, v); n[k] = val; f[1](n); };
+  var saveFood = useState(!item);
+  var del = useState(false);
+  var q = v.name.trim();
+  var shown = q ? foods.filter(function (fd) { return fd.name.indexOf(q) !== -1; }) : foods;
+  var exists = foods.some(function (fd) { return fd.name === q; });
+  function save() {
+    if (!q) return;
+    var k = parseInt(v.kcal, 10);
+    var kcal = isNaN(k) ? null : Math.max(0, k);
+    var entry = { id: item ? item.id : uid(), slot: v.slot, name: q, kcal: kcal };
+    props.store.setDay(props.date, function (d) {
+      d.meals = (d.meals || []).filter(function (m) { return m.id !== entry.id; });
+      d.meals.push(entry);
+      return d;
+    });
+    if (saveFood[0] && !exists) props.store.setSettings(function (st) { st.foods = (st.foods || []).concat([{ name: q, kcal: kcal }]); return st; });
+    props.toast(item ? '食事を保存しました' : '食事を記録しました');
+    props.onClose();
+  }
+  function remove() {
+    props.store.setDay(props.date, function (d) { d.meals = (d.meals || []).filter(function (m) { return m.id !== item.id; }); return d; });
+    props.toast('食事を削除しました'); props.onClose();
+  }
+  return html`<${Sheet} title="食事" onClose=${props.onClose}>
+    <div class="between"><h2 class="h2" style="font-size:18px">${item ? '食事を編集' : '食事を記録'}</h2><span class="muted" style="font-size:13px">${jpDate(props.date)}</span></div>
+    <${Seg} label="食事の種類" value=${v.slot} onChange=${function (x) { set('slot', x); }} options=${MEAL_SLOTS} />
+    <label class="field" for="meal-name">食べたもの（必須）<input id="meal-name" class="input" value=${v.name} onInput=${function (e) { set('name', e.target.value); }} placeholder="例：鮭おにぎり、サラダチキン" /></label>
+    ${foods.length > 0 && html`<div class="stack"><span class="label">マイ食品から選ぶ${q && shown.length !== foods.length ? '（「' + q + '」を含むもの）' : ''}</span>
+      <div class="chips" style="max-height:150px;overflow-y:auto">${shown.length ? shown.map(function (fd) {
+        return html`<button class="chip" style="--c:#6DB58A" aria-pressed=${String(fd.name === q)} onClick=${function () { f[1](Object.assign({}, v, { name: fd.name, kcal: typeof fd.kcal === 'number' ? String(fd.kcal) : '' })); }}>${fd.name}${typeof fd.kcal === 'number' && html`<span class="min">${fd.kcal}kcal</span>`}</button>`;
+      }) : html`<span class="muted" style="font-size:12px">一致するマイ食品はありません</span>`}</div></div>`}
+    <label class="field" for="meal-kcal">カロリー（わかれば）
+      <span class="row"><input id="meal-kcal" class="input num" type="number" inputmode="numeric" min="0" value=${v.kcal} onInput=${function (e) { set('kcal', e.target.value); }} placeholder="例：180" /><span style="font-size:14px;font-weight:700;color:var(--fg)">kcal</span></span>
+    </label>
+    ${q && !exists && html`<label class="row" style="font-size:13px;color:var(--fg-2)"><input type="checkbox" checked=${saveFood[0]} onChange=${function (e) { saveFood[1](e.target.checked); }} style="width:18px;height:18px;accent-color:var(--accent)" />「${q}」をマイ食品に保存する</label>`}
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" style=${q ? '' : 'opacity:.5'} onClick=${save}>保存</button></div>
+    ${item && (del[0] ? html`<div class="btns"><button class="btn sub" onClick=${function () { del[1](false); }}>やめる</button><button class="btn danger" onClick=${remove}>本当に削除する</button></div>` : html`<button class="btn danger" onClick=${function () { del[1](true); }}>この食事を削除</button>`)}
   </${Sheet}>`;
 }
 
@@ -1499,6 +1811,26 @@ function Settings(props) {
       <button style="border:none;background:none;padding:12px 14px;text-align:left;font-weight:700;color:var(--accent);font-size:14px" onClick=${function () { var id = 'c' + uid(); upd(function (st) { st.cats.push({ id: id, name: '新しいカテゴリ', color: '#7EC8E8', rule: 'any', allow: [] }); return st; }); editCat[1](id); }}>＋ カテゴリを追加</button>
     </div>
     <p class="muted" style="font-size:11px;margin:0">ルールは、重なった2つの予定のどちらから見てもOKなら警告しません。「常にOK」のカテゴリは相手に関係なく警告しません。</p>
+
+    <span class="section-title">ダイエット</span>
+    <div class="card" style="padding:0;gap:0">
+      <div class="between" style="padding:12px 14px;border-bottom:1px solid var(--line-2)">
+        <label for="goal-w" style="font-size:14px">目標体重</label>
+        <span class="row" style="gap:6px"><input id="goal-w" class="timein" style="width:90px;text-align:right" type="number" inputmode="decimal" step="0.1" min="0" value=${settings.diet && settings.diet.goalWeight != null ? settings.diet.goalWeight : ''} placeholder="未設定"
+          onChange=${function (e) { var v = parseFloat(e.target.value); upd(function (st) { st.diet = Object.assign({}, st.diet, { goalWeight: isNaN(v) || v <= 0 ? null : Math.round(v * 10) / 10 }); return st; }); }} /><span style="font-size:13px">kg</span></span>
+      </div>
+      <span style="padding:10px 14px 4px;font-size:12px;color:var(--muted);font-weight:500">マイ食品（${(settings.foods || []).length}件）</span>
+      ${(settings.foods || []).map(function (fd, i) {
+        return html`<div class="row" style="gap:8px;padding:6px 14px;border-bottom:1px solid var(--line-2)">
+          <span style="flex-grow:1;font-size:14px;min-width:0;overflow-wrap:anywhere">${fd.name}</span>
+          <label class="sr" for=${'fk' + i}>${fd.name}のカロリー</label>
+          <input id=${'fk' + i} class="timein" style="width:80px;text-align:right;font-size:14px" type="number" inputmode="numeric" min="0" value=${typeof fd.kcal === 'number' ? fd.kcal : ''} placeholder="-"
+            onChange=${function (e) { var k = parseInt(e.target.value, 10); upd(function (st) { st.foods[i].kcal = isNaN(k) ? null : k; return st; }); }} /><span class="muted" style="font-size:12px">kcal</span>
+          <button class="stepper" aria-label=${fd.name + 'を削除'} style="color:var(--bad)" onClick=${function () { upd(function (st) { st.foods.splice(i, 1); return st; }); }}>×</button>
+        </div>`;
+      })}
+      ${!(settings.foods || []).length && html`<span style="padding:4px 14px 12px;font-size:12px" class="muted">食事を記録するときに「マイ食品に保存する」を選ぶと、ここに増えます。</span>`}
+    </div>
 
     <span class="section-title">そのほか</span>
     <div class="card" style="padding:0;gap:0">
@@ -1612,12 +1944,12 @@ function App() {
   var viewS = useState(null), view = viewS[0]; // 'settings' | 'sleep'
   var dateS = useState(todayStr());
   var monthSel = useState(todayStr());
-  var subs = useState({ monthly: pref.monthly || 'plan', time: pref.time || 'plan', todo: pref.todo || 'plan' });
+  var subs = useState({ monthly: pref.monthly || 'plan', time: pref.time || 'plan', todo: pref.todo || 'plan', health: pref.health || 'diet' });
   var sheet = useState(null);
   var toastS = useState(null);
   var toastTimer = useRef(null);
   function toast(msg) { toastS[1](msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(function () { toastS[1](null); }, 2400); }
-  useEffect(function () { writePref({ tab: tab, monthly: subs[0].monthly, time: subs[0].time, todo: subs[0].todo }); }, [tab, subs[0]]);
+  useEffect(function () { writePref({ tab: tab, monthly: subs[0].monthly, time: subs[0].time, todo: subs[0].todo, health: subs[0].health }); }, [tab, subs[0]]);
   useEffect(function () { window.scrollTo(0, 0); }, [tab, view]);
   function setSub(k, v) { var n = Object.assign({}, subs[0]); n[k] = v; subs[1](n); }
   function go(t) { viewS[1](null); tabS[1](t); }
@@ -1629,7 +1961,8 @@ function App() {
   var common = {
     store: store, toast: toast,
     onGear: function () { viewS[1]('settings'); },
-    onSleep: function () { viewS[1]('sleep'); },
+    onSleep: function () { setSub('health', 'sleep'); go('health'); },
+    onDiet: function () { setSub('health', 'diet'); go('health'); },
     onEditEvent: function (date, ev) { sheet[1]({ type: 'event', date: date, event: ev }); },
     onNewEvent: function (date) { sheet[1]({ type: 'event', date: date, event: null }); },
     openTask: function (date, t) { sheet[1]({ type: 'task', date: date, task: t }); },
@@ -1646,6 +1979,7 @@ function App() {
   else if (tab === 'home') page = html`<${Home} ...${common} banner=${banner || errBanner} onTodo=${function () { dateS[1](todayStr()); go('todo'); }} />`;
   else if (tab === 'monthly') page = html`<${Monthly} ...${common} sub=${subs[0].monthly} setSub=${function (v) { setSub('monthly', v); }} selDate=${monthSel[0]} setSelDate=${monthSel[1]} onTimetable=${function (d) { dateS[1](d); setSub('time', 'plan'); go('time'); }} />`;
   else if (tab === 'time') page = html`<${Timetable} ...${common} sub=${subs[0].time} setSub=${function (v) { setSub('time', v); }} date=${dateS[0]} setDate=${dateS[1]} />`;
+  else if (tab === 'health') page = html`<${Health} ...${common} sub=${subs[0].health} setSub=${function (v) { setSub('health', v); }} />`;
   else page = html`<${Todo} ...${common} sub=${subs[0].todo} setSub=${function (v) { setSub('todo', v); }} date=${dateS[0]} setDate=${dateS[1]} />`;
 
   var sh = sheet[0], close = function () { sheet[1](null); };
@@ -1658,7 +1992,7 @@ function App() {
     else if (sh.type === 'work') sheetEl = html`<${WorkSheet} settings=${s.settings} date=${sh.date} store=${store} toast=${toast} onClose=${close} />`;
   }
 
-  var tabs = [['home', 'ホーム', I.home], ['monthly', 'マンスリー', I.cal], ['time', '時間割', I.clock], ['todo', 'ToDo', I.list]];
+  var tabs = [['home', 'ホーム', I.home], ['monthly', 'マンスリー', I.cal], ['time', '時間割', I.clock], ['todo', 'ToDo', I.list], ['health', 'ヘルス', I.heart]];
   return html`<div>
     ${tab !== 'home' && !view && (banner || errBanner) && html`<div style="max-width:520px;margin:0 auto;padding:12px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))">${banner || errBanner}</div>`}
     ${page}
