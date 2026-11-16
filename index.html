@@ -887,7 +887,7 @@ function Timetable(props) {
 
   var recorded = {};
   acts.forEach(function (a) { if (a.link) recorded[a.link] = true; });
-  var pending = plan.filter(function (p) { return !recorded[p.key] && !isBand(cm, p.cat) && (isPast || (isToday && p.end <= nowMin())); });
+  var pending = plan.filter(function (p) { return p.src !== 'task' && !recorded[p.key] && !isBand(cm, p.cat) && (isPast || (isToday && p.end <= nowMin())); });
   var prev = getDay(s.days, addDays(date, -1));
 
   function recordAsPlanned(p) {
@@ -960,12 +960,12 @@ function Timetable(props) {
         return Object.assign({}, it, { end: it.end - cut });
       });
     }
-    add(adjusted(plan), 'plan'); add(adjusted(acts), 'act');
+    add(adjusted(plan.filter(function (p) { return p.src !== 'task'; })), 'plan'); add(adjusted(acts), 'act');
     var rows = Object.keys(sum).map(function (k) { return sum[k]; });
     var sl2 = sleepFor(s.days, date);
     rows.push({ cat: { name: '睡眠', color: '#5A5FAA' }, plan: goal.min, act: sl2 ? sl2.min : 0, sleep: true, missing: !sl2 });
     var max = Math.max.apply(null, rows.map(function (r) { return Math.max(r.plan, r.act); }).concat([60]));
-    var missing = plan.filter(function (p) { return !recorded[p.key] && !isBand(cm, p.cat) && (isPast || (isToday && p.end <= nowMin())); });
+    var missing = plan.filter(function (p) { return p.src !== 'task' && !recorded[p.key] && !isBand(cm, p.cat) && (isPast || (isToday && p.end <= nowMin())); });
     body = html`
       <div class="card tight">
         <div class="between"><span class="h2" style="font-size:14px">カテゴリ別の時間</span>
@@ -1102,8 +1102,6 @@ function Todo(props) {
     var on = !t.done;
     props.store.setDay(date, function (d) {
       d.tasks.forEach(function (x) { if (x.id === t.id) { x.done = on; x.doneAt = on ? Date.now() : null; } });
-      if (on && t.start && !d.actuals.some(function (a) { return a.link === 't:' + t.id; })) d.actuals.push({ id: uid(), link: 't:' + t.id, title: t.title, cat: t.cat, start: t.start, end: t.end });
-      if (!on) d.actuals = d.actuals.filter(function (a) { return a.link !== 't:' + t.id; });
       return d;
     });
   }
@@ -1141,7 +1139,7 @@ function Todo(props) {
       <div class="stack">${openInbox.length ? openInbox.map(inboxRow) : html`<div class="card"><div class="empty"><span>日付を決めずに「どこかでやる」ことを入れておけます。</span></div></div>`}</div>
       ${doneInbox.length > 0 && html`<button style="border:none;background:none;padding:4px 0;text-align:left;font-size:12px;color:var(--accent);font-weight:700" onClick=${function () { showDone[1](!showDone[0]); }}>${showDone[0] ? '完了したものを隠す' : '完了したもの（' + doneInbox.length + '件）を表示'}</button>
         ${showDone[0] && html`<div class="stack">${doneInbox.map(inboxRow)}</div>`}`}
-      <p class="muted" style="font-size:11px;margin:0">チェックすると「実績」に完了時刻つきで記録されます。時間を決めた家事は時間割の実績にも入ります。「いつかやる」は、どの日付を開いても同じリストが出ます。</p>`;
+      <p class="muted" style="font-size:11px;margin:0">チェックすると完了の印がつきます（時間割の実績には入りません）。「いつかやる」は、どの日付を開いても同じリストが出ます。</p>`;
   } else {
     var week = [];
     for (var i = 6; i >= 0; i--) { var dd = addDays(date, -i), x = taskStats(getDay(s.days, dd)); week.push({ date: dd, pct: x.total ? Math.round(x.done / x.total * 100) : null }); }
