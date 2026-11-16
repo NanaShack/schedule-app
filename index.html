@@ -448,7 +448,37 @@ function goalFor(settings, date) {
   var m = w - b; if (m <= 0) m += 1440;
   return { bed: g.bed, wake: g.wake, min: m, holiday: isHoliday(date) };
 }
+// 寝た時刻が18時より前ならその日、18時以降なら翌日の睡眠として数える
+function sleepDayFor(ms) { var d = new Date(ms); return d.getHours() < 18 ? ymd(d) : addDays(ymd(d), 1); }
+function segsOf(day) { return (day && day.sleeps) || []; }
+function findOpenSleep(days) {
+  var t = todayStr(), best = null;
+  [addDays(t, 1), t, addDays(t, -1)].forEach(function (sd) {
+    segsOf(days[sd]).forEach(function (g) { if (g.bed && !g.wake && (!best || g.bed > best.seg.bed)) best = { date: sd, seg: g }; });
+  });
+  return best;
+}
+function sleepBlocksFor(days, date) {
+  var items = [], base = parse(date).getTime();
+  [date, addDays(date, 1)].forEach(function (sd) {
+    segsOf(days[sd]).forEach(function (g) {
+      if (!g.bed) return;
+      var end = g.wake || Date.now();
+      var s0 = (g.bed - base) / 60000, e0 = (end - base) / 60000;
+      if (e0 <= 0 || s0 >= 1440 || e0 <= s0) return;
+      items.push({ key: 's:' + g.id, src: 'sleep', sleepDate: sd, title: g.wake ? '睡眠' : '睡眠中', cat: '__sleep', color: '#5A5FAA', start: Math.max(0, s0), end: Math.min(1440, e0) });
+    });
+  });
+  return items;
+}
 function sleepFor(days, date) {
+  var segs = segsOf(days[date]).filter(function (g) { return g.bed && g.wake && g.wake > g.bed; }).sort(function (a, b) { return a.bed - b.bed; });
+  if (segs.length) {
+    var total = segs.reduce(function (a, g) { return a + (g.wake - g.bed) / 60000; }, 0);
+    var span = (segs[segs.length - 1].wake - segs[0].bed) / 60000;
+    return { min: Math.round(total), bed: segs[0].bed, wake: segs[segs.length - 1].wake, segments: segs, wakeUps: segs.length - 1, awake: Math.round(span - total) };
+  }
+  // 以前の形式（就寝・起床が1回ずつ）
   var d = days[date], p = days[addDays(date, -1)];
   if (!d || !d.wake || !p || !p.bed) return null;
   var m = (d.wake - p.bed) / 60000;
@@ -596,7 +626,7 @@ function Home(props) {
         <span class="between"><span class="big">${sl ? html`${Math.floor(sl.min / 60)}<small>h</small>${pad(sl.min % 60)}<small>m</small>` : '--'}</span>${ART.moon}</span>
         ${sl ? html`<span style="font-size:12px;font-weight:500" class=${sl.min >= goal.min ? 't-good' : 't-bad'}>目標より ${signed(sl.min - goal.min)}</span>
           <div class="bar"><div style=${'width:' + clamp(sl.min / goal.min * 100, 0, 100) + '%'}></div></div>
-          <span class="num muted" style="font-size:11px">${hm(clockOf(sl.bed))} → ${hm(clockOf(sl.wake))}</span>`
+          <span class="num muted" style="font-size:11px">${hm(clockOf(sl.bed))} → ${hm(clockOf(sl.wake))}${sl.wakeUps ? '・途中で起きた' + sl.wakeUps + '回' : ''}</span>`
         : html`<span class="muted" style="font-size:12px">時間割の実績で「寝る」「起きた」を押すと記録されます</span>`}
       </button>
       <button class="card" style="border:none;text-align:left;gap:6px" onClick=${props.onTodo}>
@@ -843,7 +873,7 @@ function Timeline(props) {
       var lay = layoutColumn(cm, col.items, { left: L, width: CW });
       var act = col.kind === 'act';
       return html`${lay.blocks.map(function (b) {
-        var it = b.it, color = colorOf(cm, it.cat);
+        var it = b.it, color = it.color || colorOf(cm, it.cat);
         var top = y(it.start), hgt = Math.max(props.compact ? 14 : 26, (it.end - it.start) * PX - 2);
         var cls = 'blk ' + (b.role === 'base' ? 'base' : act ? 'act' : 'plan') + (b.role === 'same' ? ' same' : '') + (b.role === 'inner' ? ' inner' : '') + (props.dashed && !act ? ' dashed' : '');
         var z = b.role === 'base' ? 1 : 2;
@@ -898,10 +928,22 @@ function Timetable(props) {
     });
     props.toast('「' + p.title + '」を記録しました');
   }
-  function pressWake() { var now = new Date(); props.store.setDay(ymd(now), function (d) { d.wake = now.getTime(); return d; }); props.toast('起床 ' + hm(nowMin()) + ' を記録しました'); }
-  function pressBed() { var now = new Date(); var night = now.getHours() < 12 ? addDays(ymd(now), -1) : ymd(now); props.store.setDay(night, function (d) { d.bed = now.getTime(); return d; }); props.toast('就寝 ' + hm(nowMin()) + ' を記録しました'); }
+  var openSleep = findOpenSleep(s.days);
+  function pressBed() {
+    var now = Date.now(), sd = sleepDayFor(now);
+    props.store.setDay(sd, function (d) { d.sleeps = (d.sleeps || []).concat([{ id: uid(), bed: now, wake: null }]); return d; });
+    props.toast('就寝 ' + hm(nowMin()) + ' を記録しました');
+  }
+  function pressWake() {
+    if (!openSleep) { props.openSleep(todayStr(), { wakeNow: true }); return; }
+    var now = Date.now(), o = openSleep;
+    props.store.setDay(o.date, function (d) { (d.sleeps || []).forEach(function (g) { if (g.id === o.seg.id) g.wake = now; }); return d; });
+    props.toast('起床 ' + hm(nowMin()) + ' を記録しました');
+  }
+  var sleepBlocks = sleepBlocksFor(s.days, date);
 
   function onBlock(it, kind) {
+    if (it.src === 'sleep') { props.openSleep(it.sleepDate); return; }
     if (kind === 'act' || it.src === 'actual') props.openActual(date, it);
     else if (it.src === 'event') { var e = day.events.find(function (x) { return x.id === it.id; }); if (e) props.onEditEvent(date, e); }
     else if (it.src === 'task') { var t = day.tasks.find(function (x) { return x.id === it.id; }); if (t) props.openTask(date, t); }
@@ -911,8 +953,9 @@ function Timetable(props) {
   var wakeMs = day.wake, bedMs = day.bed;
   var marksPlan = [{ min: toMin(goal.wake), label: '起床（目標）' + goal.wake }, { min: bedGoal, label: '就寝（目標）' + goal.bed }];
   var marksAct = [];
-  if (wakeMs) marksAct.push({ min: clockOf(wakeMs), label: '起床 ' + hm(clockOf(wakeMs)), solid: true });
-  if (bedMs) { var bm = clockOf(bedMs); if (bm < 12 * 60) bm += 1440; marksAct.push({ min: bm, label: '就寝 ' + hm(bm), solid: true }); }
+  var hasSegs = segsOf(day).length > 0, hasNextSegs = segsOf(getDay(s.days, addDays(date, 1))).length > 0;
+  if (wakeMs && !hasSegs) marksAct.push({ min: clockOf(wakeMs), label: '起床 ' + hm(clockOf(wakeMs)), solid: true });
+  if (bedMs && !hasNextSegs) { var bm = clockOf(bedMs); if (bm < 12 * 60) bm += 1440; marksAct.push({ min: bm, label: '就寝 ' + hm(bm), solid: true }); }
 
   var body;
   if (props.sub === 'plan') {
@@ -922,18 +965,25 @@ function Timetable(props) {
       <p class="muted" style="font-size:11px;margin:0">⚠ はルール上、重ならないほうがよい予定です。予定をタップすると編集できます。</p>`;
   } else if (props.sub === 'actual') {
     var sl = sleepFor(s.days, date);
+    var segsHere = segsOf(day).filter(function (g) { return g.bed; }).sort(function (a, b) { return a.bed - b.bed; });
     body = html`
-      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
-        <button class="card tight" style="border:none;flex-direction:row;align-items:center;gap:10px;text-align:left;background:color-mix(in srgb,#F6D77A 30%,var(--surface))" onClick=${function () { wakeMs ? props.openSleepTime(date, 'wake') : (isToday ? pressWake() : props.openSleepTime(date, 'wake')); }}>
-          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="7" fill="#F6D77A"></circle><g fill="#F6D77A"><rect x="13" y="1" width="2" height="4" rx="1"></rect><rect x="13" y="23" width="2" height="4" rx="1"></rect><rect x="1" y="13" width="4" height="2" rx="1"></rect><rect x="23" y="13" width="4" height="2" rx="1"></rect></g></svg>
-          <span class="stack" style="gap:0"><span style="font-size:12px;font-weight:700">${wakeMs ? '起きた ✓' : '起きた'}</span><span class="num" style="font-size:16px;font-weight:600">${wakeMs ? hm(clockOf(wakeMs)) : (isToday ? '押して記録' : '時刻を入れる')}</span></span>
+      ${isToday && html`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        <button class="card tight" style=${'border:none;flex-direction:row;align-items:center;gap:10px;text-align:left;' + (openSleep ? 'background:#F6D77A;color:#1C2230' : 'background:color-mix(in srgb,#F6D77A 30%,var(--surface))')} onClick=${pressWake}>
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="7" fill=${openSleep ? '#FFFFFF' : '#F6D77A'}></circle><g fill=${openSleep ? '#FFFFFF' : '#F6D77A'}><rect x="13" y="1" width="2" height="4" rx="1"></rect><rect x="13" y="23" width="2" height="4" rx="1"></rect><rect x="1" y="13" width="4" height="2" rx="1"></rect><rect x="23" y="13" width="4" height="2" rx="1"></rect></g></svg>
+          <span class="stack" style="gap:0"><span style="font-size:14px;font-weight:700">起きた</span><span style="font-size:11px">${openSleep ? hm(clockOf(openSleep.seg.bed)) + 'から睡眠中' : '押した時刻を記録'}</span></span>
         </button>
-        <button class="card tight" style="border:none;flex-direction:row;align-items:center;gap:10px;text-align:left;background:var(--accent);color:var(--accent-ink)" onClick=${function () { bedMs ? props.openSleepTime(date, 'bed') : (isToday ? pressBed() : props.openSleepTime(date, 'bed')); }}>
+        <button class="card tight" style=${'border:none;flex-direction:row;align-items:center;gap:10px;text-align:left;background:var(--accent);color:var(--accent-ink);' + (openSleep ? 'opacity:.5' : '')} disabled=${!!openSleep} onClick=${pressBed}>
           <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M15 4a10 10 0 1 0 9 14A8.5 8.5 0 0 1 15 4z" fill="#F3D27A"></path></svg>
-          <span class="stack" style="gap:0"><span style="font-size:12px;font-weight:700">${bedMs ? '寝た ✓' : '寝る'}</span><span class="num" style="font-size:${bedMs ? 16 : 12}px;font-weight:${bedMs ? 600 : 500}">${bedMs ? hm(clockOf(bedMs)) : (isToday ? '押した時刻を記録' : '時刻を入れる')}</span></span>
+          <span class="stack" style="gap:0"><span style="font-size:14px;font-weight:700">寝る</span><span style="font-size:11px">${openSleep ? '「起きた」を押すと終わります' : '二度寝のときももう一度押す'}</span></span>
         </button>
-      </div>
-      ${sl && html`<p class="muted" style="font-size:12px;margin:0">この日の睡眠 <span class="num" style="color:var(--fg);font-weight:600">${dur(sl.min)}</span>（前日 ${hm(clockOf(sl.bed))} に就寝）</p>`}
+      </div>`}
+      <button class="card tight" style="border:none;text-align:left;gap:6px" onClick=${function () { props.openSleep(date); }}>
+        <span class="between"><span class="label">この日の睡眠（前の夜〜朝）</span><span style="font-size:12px;color:var(--accent);font-weight:700">${segsHere.length || sl ? '編集' : '手で入力'} ›</span></span>
+        ${sl ? html`<span style="font-size:13px"><span class="num" style="font-size:18px;font-weight:600">${dur(sl.min)}</span>${sl.wakeUps ? html`<span class="muted" style="margin-left:8px">途中で起きた ${sl.wakeUps}回（${dur(sl.awake)}）</span>` : ''}</span>` : html`<span class="muted" style="font-size:12px">${segsHere.length ? '起きた時刻を記録すると計算されます' : 'まだ記録がありません'}</span>`}
+        ${segsHere.length > 0 && html`<span class="stack" style="gap:2px">${segsHere.map(function (g, i) {
+          return html`<span class="num" style="font-size:12px;color:var(--fg-2)">${i + 1}回目　${hm(clockOf(g.bed))} → ${g.wake ? hm(clockOf(g.wake)) + '（' + dur((g.wake - g.bed) / 60000) + '）' : '睡眠中'}</span>`;
+        })}</span>`}
+      </button>
       ${pending.length > 0 && html`<div class="card tight">
         <span class="label">まだ記録していない予定</span>
         ${pending.map(function (p) {
@@ -945,7 +995,7 @@ function Timetable(props) {
           </div>`;
         })}
       </div>`}
-      ${acts.length || wakeMs || bedMs ? html`<${Timeline} cm=${cm} columns=${[{ items: acts, kind: 'act' }]} marks=${marksAct} now=${nm} onBlock=${onBlock} />`
+      ${acts.length || sleepBlocks.length || marksAct.length ? html`<${Timeline} cm=${cm} columns=${[{ items: acts.concat(sleepBlocks), kind: 'act' }]} marks=${marksAct} now=${nm} onBlock=${onBlock} />`
         : html`<div class="card"><div class="empty">${ART.sleepy}<span>まだ実績はありません。右下の＋か「予定どおり」で記録できます。</span></div></div>`}`;
   } else {
     var sum = {};
@@ -980,8 +1030,8 @@ function Timetable(props) {
         })}
         ${missing.length > 0 && html`<span style="font-size:12px" class="t-bad">記録なし：${missing.map(function (p) { return p.title; }).join('、')}</span>`}
       </div>
-      <${Timeline} cm=${cm} compact=${true} dashed=${true} columns=${[{ items: plan, kind: 'plan', label: '予定' }, { items: acts, kind: 'act', label: '実績' }]}
-        marks=${[{ min: toMin(goal.wake), col: 0 }].concat(wakeMs ? [{ min: clockOf(wakeMs), col: 1, solid: true }] : [])} now=${nm} onBlock=${onBlock} />`;
+      <${Timeline} cm=${cm} compact=${true} dashed=${true} columns=${[{ items: plan, kind: 'plan', label: '予定' }, { items: acts.concat(sleepBlocks), kind: 'act', label: '実績' }]}
+        marks=${[{ min: toMin(goal.wake), col: 0 }].concat(wakeMs && !hasSegs ? [{ min: clockOf(wakeMs), col: 1, solid: true }] : [])} now=${nm} onBlock=${onBlock} />`;
   }
 
   return html`<div class="app">
@@ -1034,27 +1084,63 @@ function ActualSheet(props) {
   </${Sheet}>`;
 }
 
-/* 起床・就寝の時刻を直す */
-function SleepTimeSheet(props) {
-  var day = getDay(props.days, props.date);
-  var isBed = props.which === 'bed';
-  var cur = isBed ? day.bed : day.wake;
-  var f = useState(cur ? hm2(clockOf(cur)) : (isBed ? '23:00' : '06:30'));
-  function save() {
-    var m = toMin(f[0]);
-    var base = parse(props.date);
-    if (isBed && m < 12 * 60) base.setDate(base.getDate() + 1);
-    base.setHours(Math.floor(m / 60), m % 60, 0, 0);
-    props.store.setDay(props.date, function (d) { if (isBed) d.bed = base.getTime(); else d.wake = base.getTime(); return d; });
-    props.toast((isBed ? '就寝' : '起床') + 'の時刻を保存しました'); props.onClose();
+/* 睡眠の記録を直す（寝た〜起きたを何回でも） */
+function msFromTime(date, t, isBed) {
+  var m = toMin(t); if (m == null) return null;
+  var base = parse(date);
+  if (isBed && m >= 18 * 60) base.setDate(base.getDate() - 1);
+  base.setHours(Math.floor(m / 60), m % 60, 0, 0);
+  return base.getTime();
+}
+function SleepSheet(props) {
+  var day = getDay(props.days, props.date), prev = getDay(props.days, addDays(props.date, -1));
+  var init = segsOf(day).slice().sort(function (a, b) { return (a.bed || 0) - (b.bed || 0); }).map(function (g) { return { id: g.id, bed: g.bed ? hm2(clockOf(g.bed)) : '', wake: g.wake ? hm2(clockOf(g.wake)) : '' }; });
+  if (!init.length && day.wake && prev.bed) init = [{ id: uid(), bed: hm2(clockOf(prev.bed)), wake: hm2(clockOf(day.wake)) }];
+  if (!init.length) init = [{ id: uid(), bed: '', wake: props.opts && props.opts.wakeNow ? hm2(nowMin()) : '' }];
+  var rowsS = useState(init), rows = rowsS[0];
+  function setRow(i, k, v) { var n = rows.map(function (r) { return Object.assign({}, r); }); n[i][k] = v; rowsS[1](n); }
+  function addRow() {
+    var last = rows[rows.length - 1];
+    var b = last && last.wake ? hm2(toMin(last.wake) + 30) : '';
+    rowsS[1](rows.concat([{ id: uid(), bed: b, wake: '' }]));
   }
-  function clear() { props.store.setDay(props.date, function (d) { if (isBed) d.bed = null; else d.wake = null; return d; }); props.onClose(); }
-  return html`<${Sheet} title="時刻" onClose=${props.onClose}>
-    <h2 class="h2" style="font-size:18px">${jpDate(props.date)}の${isBed ? '就寝' : '起床'}</h2>
-    ${isBed && html`<p class="muted" style="margin:0;font-size:12px">0:00〜11:59 にすると、翌日の深夜として記録します。</p>`}
-    <div class="group"><div class="between"><label for="st-time" style="font-size:14px">${isBed ? '寝た時刻' : '起きた時刻'}</label><input id="st-time" type="time" class="timein" value=${f[0]} onChange=${function (e) { if (e.target.value) f[1](e.target.value); }} /></div></div>
-    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" onClick=${save}>保存</button></div>
-    ${cur && html`<button class="btn danger" onClick=${clear}>記録を消す</button>`}
+  function delRow(i) { rowsS[1](rows.filter(function (_, j) { return j !== i; })); }
+  var calc = rows.map(function (r) {
+    var b = r.bed ? msFromTime(props.date, r.bed, true) : null, w = r.wake ? msFromTime(props.date, r.wake, false) : null;
+    var bad = b != null && w != null && w <= b;
+    return { b: b, w: w, bad: bad, min: b != null && w != null && !bad ? (w - b) / 60000 : null };
+  });
+  var total = calc.reduce(function (a, c) { return a + (c.min || 0); }, 0);
+  var anyBad = calc.some(function (c) { return c.bad; });
+  var sorted = calc.filter(function (c) { return c.b != null; }).sort(function (a, b) { return a.b - b.b; });
+  var overlap = sorted.some(function (c, i) { return i > 0 && sorted[i - 1].w != null && c.b < sorted[i - 1].w; });
+  function save() {
+    if (anyBad || overlap) return;
+    var segs = rows.map(function (r, i) { return { id: r.id, bed: calc[i].b, wake: calc[i].w }; }).filter(function (g) { return g.bed != null; });
+    props.store.setDay(props.date, function (d) { d.sleeps = segs; return d; });
+    props.toast('睡眠を保存しました'); props.onClose();
+  }
+  return html`<${Sheet} title="睡眠" onClose=${props.onClose}>
+    <h2 class="h2" style="font-size:18px">${jpDate(props.date)}の睡眠</h2>
+    <p class="muted" style="margin:0;font-size:12px;line-height:1.6">前の夜から朝までの睡眠です。途中で起きて作業し、また寝たときは「＋ 二度寝を追加」で行を分けます。寝ていた時間の合計が睡眠時間になります。18時以降に寝た時刻は前日の夜として数えます。</p>
+    <div class="group">
+      ${rows.map(function (r, i) {
+        var c = calc[i];
+        return html`<div class="stack" style="gap:6px">
+          <div class="between"><span style="font-size:13px;font-weight:700">${i + 1}回目</span>
+            <span class="row" style="gap:8px"><span class=${'num ' + (c.bad ? 't-bad' : 'muted')} style="font-size:12px">${c.bad ? '起きた時刻が寝た時刻より前です' : c.min != null ? dur(c.min) : (c.b != null && !c.w ? '睡眠中' : '')}</span>
+            ${rows.length > 1 && html`<button class="stepper" aria-label=${(i + 1) + '回目を削除'} style="color:var(--bad)" onClick=${function () { delRow(i); }}>×</button>`}</span></div>
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <label for=${'sb' + i} style="font-size:13px;color:var(--fg-2)">寝た</label><input id=${'sb' + i} type="time" class="timein" value=${r.bed} onChange=${function (e) { setRow(i, 'bed', e.target.value); }} />
+            <label for=${'sw' + i} style="font-size:13px;color:var(--fg-2)">起きた</label><input id=${'sw' + i} type="time" class="timein" value=${r.wake} onChange=${function (e) { setRow(i, 'wake', e.target.value); }} />
+          </div>
+        </div>`;
+      })}
+    </div>
+    <button class="btn small ghost" style="align-self:flex-start" onClick=${addRow}>＋ 二度寝を追加</button>
+    ${overlap && html`<div class="warnbox" role="alert">${I.warn}<span>時間が重なっている行があります。寝た〜起きたが重ならないように直してください。</span></div>`}
+    <div class="between" style="padding:0 4px"><span style="font-size:13px;color:var(--fg-2)">合計の睡眠時間</span><span class="big" style="font-size:24px">${total ? dur(total) : '--'}</span></div>
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" style=${anyBad || overlap ? 'opacity:.5' : ''} onClick=${save}>保存</button></div>
   </${Sheet}>`;
 }
 
@@ -2066,7 +2152,7 @@ function App() {
     openTask: function (date, t) { sheet[1]({ type: 'task', date: date, task: t }); },
     openInbox: function (date, item) { sheet[1]({ type: 'inbox', date: date, item: item }); },
     openActual: function (date, a, p) { sheet[1]({ type: 'actual', date: date, actual: a && a.src === 'actual' ? a : null, fromPlan: p || null }); },
-    openSleepTime: function (date, which) { sheet[1]({ type: 'sleeptime', date: date, which: which }); },
+    openSleep: function (date, opts) { sheet[1]({ type: 'sleep', date: date, opts: opts || {} }); },
     openWork: function (date) { sheet[1]({ type: 'work', date: date }); }
   };
 
@@ -2088,7 +2174,7 @@ function App() {
     else if (sh.type === 'inbox') sheetEl = html`<${InboxSheet} key=${'ib' + (sh.item ? sh.item.id : 'new')} settings=${s.settings} date=${sh.date} item=${sh.item} store=${store} toast=${toast} onClose=${close} />`;
     else if (sh.type === 'task') sheetEl = html`<${TaskSheet} key=${'tk' + (sh.task ? sh.task.id : 'new')} settings=${s.settings} days=${s.days} date=${sh.date} task=${sh.task} store=${store} toast=${toast} onClose=${close} />`;
     else if (sh.type === 'actual') sheetEl = html`<${ActualSheet} settings=${s.settings} date=${sh.date} actual=${sh.actual} fromPlan=${sh.fromPlan} store=${store} toast=${toast} onClose=${close} />`;
-    else if (sh.type === 'sleeptime') sheetEl = html`<${SleepTimeSheet} days=${s.days} date=${sh.date} which=${sh.which} store=${store} toast=${toast} onClose=${close} />`;
+    else if (sh.type === 'sleep') sheetEl = html`<${SleepSheet} key=${'sl' + sh.date} days=${s.days} date=${sh.date} opts=${sh.opts} store=${store} toast=${toast} onClose=${close} />`;
     else if (sh.type === 'work') sheetEl = html`<${WorkSheet} settings=${s.settings} date=${sh.date} store=${store} toast=${toast} onClose=${close} />`;
   }
 
