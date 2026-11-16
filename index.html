@@ -1,0 +1,1680 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>スケジュール帳</title>
+<meta name="theme-color" content="#5A5FAA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="スケジュール帳">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: スマホ幅の1カラム。上にヘッダー、下に固定タブ。PCでは中央に最大520pxで表示 */
+:root {
+  --bg: #F4F5F8;
+  --surface: #FFFFFF;
+  --surface-2: #F1F2F6;
+  --fg: #1C2230;
+  --fg-2: #3A4354;
+  --muted: #5F6B7D;
+  --line: #E3E6EC;
+  --line-2: #EEF0F4;
+  --accent: #5A5FAA;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #EEEFF7;
+  --seg: #E7E8EF;
+  --good: #23663E; --good-bg: #E3F1E8;
+  --bad: #9E2F2F; --bad-bg: #F8E3E3;
+  --warn: #6B4E00; --warn-bg: #FFF4DA; --warn-icon: #B07D00;
+  --now: #B23B3B;
+  --stripe-a: #F3F4F7; --stripe-b: #E8EAEF;
+  --ink-dark: #1C2230;
+  --shadow: 0 6px 16px rgba(90, 95, 170, 0.35);
+  --scrim: rgba(28, 34, 48, 0.45);
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14171E; --surface: #1D212B; --surface-2: #262B37; --fg: #E8EAF0; --fg-2: #C5CAD6; --muted: #98A1B3;
+    --line: #2F3542; --line-2: #282D39; --accent: #9A9EE0; --accent-ink: #14171E; --accent-soft: #2A2D45; --seg: #2A2F3B;
+    --good: #7FD3A0; --good-bg: #1F3328; --bad: #F2A0A0; --bad-bg: #3A2224;
+    --warn: #F5D27A; --warn-bg: #3A3220; --warn-icon: #F5C24A; --now: #F27A7A;
+    --stripe-a: #252A35; --stripe-b: #2E3441; --shadow: 0 6px 16px rgba(0, 0, 0, 0.45); --scrim: rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14171E; --surface: #1D212B; --surface-2: #262B37; --fg: #E8EAF0; --fg-2: #C5CAD6; --muted: #98A1B3;
+  --line: #2F3542; --line-2: #282D39; --accent: #9A9EE0; --accent-ink: #14171E; --accent-soft: #2A2D45; --seg: #2A2F3B;
+  --good: #7FD3A0; --good-bg: #1F3328; --bad: #F2A0A0; --bad-bg: #3A2224;
+  --warn: #F5D27A; --warn-bg: #3A3220; --warn-icon: #F5C24A; --now: #F27A7A;
+  --stripe-a: #252A35; --stripe-b: #2E3441; --shadow: 0 6px 16px rgba(0, 0, 0, 0.45); --scrim: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5; -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.app { max-width: 520px; margin: 0 auto; min-height: 100%;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.between { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.stack { display: flex; flex-direction: column; gap: 8px; }
+.card { background: var(--surface); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card.tight { padding: 10px 12px; gap: 8px; }
+.label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.section-title { font-size: 13px; font-weight: 700; color: var(--fg-2); margin: 4px 0 0; }
+.big { font-family: var(--font-num); font-size: 26px; font-weight: 600; line-height: 1.1; }
+.big small { font-size: 15px; }
+.chip-good { font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: var(--good-bg); color: var(--good); }
+.chip-bad { font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 999px; background: var(--bad-bg); color: var(--bad); }
+.t-good { color: var(--good); } .t-bad { color: var(--bad); }
+.bar { height: 6px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
+.bar > div { height: 100%; background: var(--accent); border-radius: 3px; }
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.datenav { display: flex; align-items: center; margin-left: -10px; min-width: 0; }
+.datenav .title { font-size: 20px; font-weight: 700; white-space: nowrap; }
+.iconbtn { width: 44px; height: 44px; border: none; border-radius: 22px; background: var(--surface); color: var(--muted); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.iconbtn.plain { background: transparent; color: var(--fg-2); width: 40px; font-size: 20px; }
+.todaybtn { border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: var(--fg-2); }
+
+/* Segmented */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); background: var(--seg); border-radius: 10px; padding: 3px; }
+.seg button { border: none; border-radius: 8px; background: transparent; padding: 8px 0; font-size: 13px; color: var(--fg-2); }
+.seg button[aria-pressed="true"] { background: var(--surface); font-weight: 700; color: var(--fg); }
+
+/* Bottom nav */
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line);
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+.nav-inner { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.nav button { border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0; font-size: 11px; color: var(--muted); }
+.nav button[aria-current="page"] { color: var(--accent); font-weight: 700; }
+.fab { position: fixed; z-index: 15; right: max(20px, calc(50% - 240px)); bottom: calc(88px + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; border-radius: 28px; border: none; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow); }
+
+/* Calendar */
+.cal { background: var(--surface); border-radius: 14px; padding: 10px 8px; display: flex; flex-direction: column; gap: 4px; }
+.cal-head, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.cal-head span { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); }
+.cal-head span:first-child { color: var(--now); }
+.cal-head span:last-child { color: #3F57A6; }
+.cell { min-height: 64px; border-radius: 8px; border: 2px solid transparent; background: transparent; padding: 3px; display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.cell.sel { background: var(--accent-soft); }
+.cell.today { border-color: var(--accent); }
+.cell.out { opacity: 0.35; }
+.cell .d { font-family: var(--font-num); font-size: 11px; font-weight: 600; }
+.cell .d.sun { color: var(--now); } .cell .d.sat { color: #3F57A6; }
+.cell .ev { font-size: 9px; line-height: 1.35; border-radius: 3px; padding: 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--c) 25%, var(--surface)); border-left: 3px solid var(--c); }
+.cell .sl { font-family: var(--font-num); font-size: 10px; color: var(--fg-2); }
+.cell .note { font-size: 9px; line-height: 1.35; background: color-mix(in srgb, #E8C55A 30%, var(--surface)); border-radius: 3px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.more { font-size: 9px; color: var(--muted); }
+
+/* Lists */
+.item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: none; background: var(--surface); text-align: left; width: 100%; min-width: 0; }
+.item .grow { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; }
+.item .title { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.item .sub { font-family: var(--font-num); font-size: 11px; color: var(--muted); }
+.box { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--c); background: var(--surface); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex: none; }
+.box.on { background: var(--c); }
+.item.done .title { text-decoration: line-through; color: var(--muted); }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--c) 22%, var(--surface)); border: 1px solid var(--c); white-space: nowrap; flex: none; }
+.evrow { display: flex; gap: 10px; align-items: stretch; border: none; background: transparent; padding: 0; text-align: left; width: 100%; }
+.evrow .time { font-family: var(--font-num); font-size: 12px; width: 84px; color: var(--fg-2); padding-top: 4px; flex: none; }
+.evrow .body { flex-grow: 1; min-width: 0; border-radius: 10px; padding: 7px 12px; background: color-mix(in srgb, var(--c) 22%, var(--surface)); border-left: 4px solid var(--c); display: flex; flex-direction: column; }
+.evrow .body b { font-size: 14px; overflow-wrap: anywhere; }
+.evrow .body span { font-size: 11px; color: var(--fg-2); }
+.empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 8px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* Timeline */
+.tl { position: relative; background: var(--surface); border-radius: 14px; overflow: hidden; }
+.tl .hl { position: absolute; left: 8px; font-family: var(--font-num); font-size: 10px; color: var(--muted); transform: translateY(-50%); }
+.tl .hr { position: absolute; left: 46px; right: 8px; border-top: 1px solid var(--line-2); }
+.blk { position: absolute; border-radius: 6px; padding: 2px 6px; overflow: hidden; border: none; text-align: left; display: flex; flex-direction: column; line-height: 1.25; color: var(--fg); }
+.blk b { font-size: 12px; display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk span { font-family: var(--font-num); font-size: 10px; white-space: nowrap; }
+.blk.plan { background: color-mix(in srgb, var(--c) 22%, var(--surface)); border-left: 4px solid var(--c); }
+.blk.plan.dashed { border: 1.5px dashed var(--c); }
+.blk.act { background: var(--c); color: var(--ink); }
+.blk.base { background: repeating-linear-gradient(135deg, var(--stripe-a) 0 6px, var(--stripe-b) 6px 12px); border-left: 4px solid var(--c); color: var(--fg); }
+.blk.base.dashed { border: 1.5px dashed var(--c); }
+.blk.same.plan { background: var(--surface); border: 1.5px solid var(--c); border-left-width: 4px; box-shadow: 0 2px 8px rgba(28, 34, 48, 0.18); }
+.blk.same.act { box-shadow: 0 0 0 2px var(--surface), 0 3px 8px rgba(28, 34, 48, 0.25); }
+.blk.inner { box-shadow: 0 0 0 2px var(--surface); }
+.band { position: absolute; width: 8px; border-radius: 4px; background: var(--c); border: none; padding: 0; }
+.bandlabel { position: absolute; font-size: 10px; font-weight: 700; color: var(--fg); background: color-mix(in srgb, var(--c) 30%, var(--surface)); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+.mark { position: absolute; border-top: 2px dashed var(--accent); z-index: 5; pointer-events: none; }
+.mark.solid { border-top-style: solid; }
+.mark span { position: absolute; left: 0; top: -10px; font-size: 10px; font-weight: 700; color: var(--accent); background: var(--surface); padding: 0 4px; white-space: nowrap; }
+.nowline { position: absolute; border-top: 2px solid var(--now); z-index: 6; pointer-events: none; }
+.nowline span { position: absolute; right: 12px; top: -9px; font-family: var(--font-num); font-size: 10px; font-weight: 600; color: var(--now); background: var(--surface); padding: 0 4px; }
+
+/* Sheets */
+.scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); border: none; }
+.sheet { position: fixed; z-index: 41; left: 0; right: 0; bottom: 0; margin: 0 auto; max-width: 560px; max-height: 92%; overflow-y: auto; background: var(--surface); border-radius: 24px 24px 0 0;
+  padding: 10px max(20px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 14px; }
+.grab { align-self: center; width: 40px; height: 5px; border-radius: 3px; background: var(--line); flex: none; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 500; }
+.input { font-size: 16px; color: var(--fg); padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--surface); width: 100%; min-width: 0; }
+textarea.input { min-height: 90px; resize: vertical; line-height: 1.6; }
+.timein { font-family: var(--font-num); font-size: 16px; font-weight: 600; border: none; background: var(--surface-2); border-radius: 8px; padding: 6px 8px; color: var(--fg); }
+.group { border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; }
+.group > * { padding: 10px 12px; border-bottom: 1px solid var(--line-2); }
+.group > *:last-child { border-bottom: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--surface); font-size: 13px; }
+.chip[aria-pressed="true"] { border-color: var(--c, var(--accent)); background: color-mix(in srgb, var(--c, var(--accent)) 22%, var(--surface)); font-weight: 700; }
+.chip .dot { width: 10px; height: 10px; border-radius: 5px; background: var(--c); }
+.chip .min { font-family: var(--font-num); font-size: 11px; color: var(--muted); font-weight: 500; }
+.btn { border: none; border-radius: 12px; padding: 13px 0; font-size: 15px; font-weight: 700; background: var(--accent); color: var(--accent-ink); }
+.btn.sub { background: var(--surface-2); color: var(--fg); font-weight: 500; }
+.btn.danger { background: var(--bad-bg); color: var(--bad); }
+.btn.small { padding: 7px 12px; font-size: 12px; border-radius: 999px; }
+.btn.ghost { background: transparent; border: 1.5px solid var(--accent); color: var(--accent); }
+.btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.switch { width: 46px; height: 28px; border-radius: 14px; border: none; background: var(--line); position: relative; flex: none; padding: 0; }
+.switch::after { content: ""; position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 11px; background: #fff; transition: left 0.15s; }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"]::after { left: 21px; }
+.warnbox { display: flex; gap: 8px; align-items: flex-start; background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5; }
+.okbox { display: flex; gap: 8px; align-items: flex-start; background: var(--good-bg); color: var(--good); border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.5; }
+.stepper { width: 32px; height: 32px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); font-size: 16px; color: var(--fg-2); flex: none; }
+.banner { font-size: 12px; background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 8px 12px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); z-index: 50; background: var(--fg); color: var(--bg); padding: 8px 16px; border-radius: 999px; font-size: 13px; }
+.swatch { width: 30px; height: 30px; border-radius: 15px; border: none; background: var(--c); }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--fg); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div id="app"><div class="app"><p class="muted">読み込み中…</p></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="vendor/htm-preact.js"></script>
+<script>
+(function () {
+'use strict';
+var P = window.htmPreact;
+var html = P.html, render = P.render, useState = P.useState, useEffect = P.useEffect, useMemo = P.useMemo, useRef = P.useRef;
+
+/* ---------- 日付・時刻 ---------- */
+var DOW = ['日', '月', '火', '水', '木', '金', '土'];
+var HOLIDAYS = new Set([
+  '2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24','2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24',
+  '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23',
+  '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22','2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23','2027-10-11','2027-11-03','2027-11-23'
+]);
+function pad(n) { return String(n).padStart(2, '0'); }
+function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function parse(s) { var a = s.split('-'); return new Date(+a[0], +a[1] - 1, +a[2]); }
+function addDays(s, n) { var d = parse(s); d.setDate(d.getDate() + n); return ymd(d); }
+function todayStr() { return ymd(new Date()); }
+function toMin(t) { if (!t) return null; var a = t.split(':'); return (+a[0]) * 60 + (+a[1]); }
+function hm(m) { m = Math.round(m); var mm = ((m % 1440) + 1440) % 1440; return Math.floor(mm / 60) + ':' + pad(mm % 60); }
+function hm2(m) { var mm = ((Math.round(m) % 1440) + 1440) % 1440; return pad(Math.floor(mm / 60)) + ':' + pad(mm % 60); }
+function dur(m) { m = Math.round(m); return Math.floor(m / 60) + 'h' + pad(m % 60) + 'm'; }
+function signed(m) { m = Math.round(m); if (m === 0) return '±0分'; var s = m > 0 ? '+' : '−'; var a = Math.abs(m); return s + (a >= 60 ? Math.floor(a / 60) + '時間' + (a % 60 ? (a % 60) + '分' : '') : a + '分'); }
+function isHoliday(s) { var d = parse(s).getDay(); return d === 0 || d === 6 || HOLIDAYS.has(s); }
+function isNatHoliday(s) { return HOLIDAYS.has(s); }
+function jpDate(s, withDow) { var d = parse(s); return (d.getMonth() + 1) + '月' + d.getDate() + '日' + (withDow === false ? '' : '（' + DOW[d.getDay()] + '）'); }
+function nowMin() { var d = new Date(); return d.getHours() * 60 + d.getMinutes(); }
+function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+/* ---------- 初期設定 ---------- */
+var DEFAULT_SETTINGS = {
+  work: { days: [1, 2, 3, 4, 5], start: '09:00', end: '18:00', skipHoliday: true },
+  goal: { weekday: { bed: '23:00', wake: '06:30' }, holiday: { bed: '00:00', wake: '08:00' } },
+  chores: [
+    { name: '洗濯', min: 45 }, { name: '掃除機', min: 20 }, { name: '料理', min: 40 }, { name: '皿洗い', min: 15 }, { name: 'ゴミ出し', min: 5 },
+    { name: '風呂掃除', min: 20 }, { name: 'トイレ掃除', min: 10 }, { name: '買い物', min: 60 }, { name: '布団干し', min: 10 }, { name: 'アイロン', min: 30 }
+  ],
+  cats: [
+    { id: 'work', name: '仕事', color: '#8A93A3', rule: 'pick', allow: ['work'] },
+    { id: 'house', name: '家事', color: '#B08A6A', rule: 'pick', allow: ['house'] },
+    { id: 'stream', name: '配信予定', color: '#ACAFD4', rule: 'always', allow: [] },
+    { id: 'outing', name: 'お出かけ', color: '#E8C55A', rule: 'none', allow: [] },
+    { id: 'koyanagi', name: '小柳ロウ関係', color: '#5A5FAA', parent: 'outing' },
+    { id: 'yamaga', name: '松本山雅関係', color: '#6DB58A', parent: 'outing' },
+    { id: 'idol', name: 'アイドル関係', color: '#EE9AC0', parent: 'outing' },
+    { id: 'outing-other', name: 'その他のお出かけ', color: '#E8C55A', parent: 'outing' },
+    { id: 'errand', name: '用事', color: '#E07A7A', rule: 'none', allow: [] },
+    { id: 'study', name: '勉強', color: '#A48BD6', rule: 'none', allow: [] },
+    { id: 'other', name: 'その他', color: '#BDB7B0', rule: 'any', allow: [] }
+  ]
+};
+var PALETTE = ['#8A93A3', '#B08A6A', '#ACAFD4', '#5A5FAA', '#6DB58A', '#EE9AC0', '#E8C55A', '#E07A7A', '#A48BD6', '#7EC8E8', '#BDB7B0', '#F0A86E'];
+function emptyDay(date) { return { date: date, events: [], tasks: [], actuals: [], wake: null, bed: null, note: '', workOff: null }; }
+function fillSettings(s) {
+  var d = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  if (!s) return d;
+  return {
+    work: Object.assign(d.work, s.work || {}),
+    goal: { weekday: Object.assign(d.goal.weekday, (s.goal || {}).weekday || {}), holiday: Object.assign(d.goal.holiday, (s.goal || {}).holiday || {}) },
+    chores: Array.isArray(s.chores) ? s.chores : d.chores,
+    cats: Array.isArray(s.cats) && s.cats.length ? s.cats : d.cats
+  };
+}
+
+/* ---------- カテゴリと重なりルール ---------- */
+function catMap(settings) { var m = {}; settings.cats.forEach(function (c) { m[c.id] = c; }); return m; }
+function rootOf(cm, id) { var c = cm[id]; if (!c) return cm.other || { id: 'other', rule: 'any', allow: [], color: '#BDB7B0', name: 'その他' }; return c.parent && cm[c.parent] ? cm[c.parent] : c; }
+function colorOf(cm, id) { var c = cm[id]; return c ? c.color : '#BDB7B0'; }
+function catName(cm, id) { var c = cm[id]; if (!c) return 'その他'; return c.name; }
+function okFrom(x, yId) { if (x.rule === 'any') return true; if (x.rule === 'none') return false; return (x.allow || []).indexOf(yId) !== -1; }
+function canOverlap(cm, aId, bId) {
+  var a = rootOf(cm, aId), b = rootOf(cm, bId);
+  if (a.rule === 'always' || b.rule === 'always') return true;
+  return okFrom(a, b.id) && okFrom(b, a.id);
+}
+function isBand(cm, id) { return rootOf(cm, id).rule === 'always'; }
+function inkFor(hex) {
+  var h = hex.replace('#', ''); if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+  var r = parseInt(h.slice(0, 2), 16) / 255, g = parseInt(h.slice(2, 4), 16) / 255, b = parseInt(h.slice(4, 6), 16) / 255;
+  var f = function (v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  var L = 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  return L > 0.3 ? '#1C2230' : '#FFFFFF';
+}
+
+/* ---------- 保存（db／この端末） ---------- */
+var LS_KEY = 'schedule-book-v1';
+function lsGet() { try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch (e) { return null; } }
+function lsSet(v) { try { localStorage.setItem(LS_KEY, JSON.stringify(v)); } catch (e) { /* 保存できない環境 */ } }
+
+/* ---------- 保存（Firebase／この端末） ---------- */
+var CFG = window.FIREBASE_CONFIG || {};
+var FB_READY = !!(window.firebase && CFG.apiKey && CFG.apiKey.indexOf('ここに') === -1 && CFG.projectId);
+var fbApp = null, fbAuth = null, fbDb = null;
+if (FB_READY) {
+  try {
+    fbApp = firebase.initializeApp(CFG);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+    fbDb.enablePersistence({ synchronizeTabs: true }).catch(function () { /* オフライン保存が使えない環境 */ });
+  } catch (e) { FB_READY = false; }
+}
+function wantLocal() { try { return localStorage.getItem('schedule-book-local') === '1'; } catch (e) { return false; } }
+function setWantLocal(v) { try { if (v) localStorage.setItem('schedule-book-local', '1'); else localStorage.removeItem('schedule-book-local'); } catch (e) { /* なし */ } }
+
+function useStore() {
+  var st = useState({ mode: 'loading', settings: fillSettings(null), days: {}, error: '', user: null });
+  var state = st[0], setState = st[1];
+  var ref = useRef({ col: null, queue: {}, unsub: null });
+
+  function goLocal() {
+    var saved = lsGet() || {};
+    setState({ mode: 'local', settings: fillSettings(saved.settings), days: saved.days || {}, error: '', user: null });
+  }
+  useEffect(function () {
+    if (wantLocal() || !FB_READY) {
+      if (!FB_READY && !wantLocal()) { setState(function (s) { return Object.assign({}, s, { mode: 'unconfigured' }); }); return; }
+      goLocal(); return;
+    }
+    var offAuth = fbAuth.onAuthStateChanged(function (user) {
+      if (ref.current.unsub) { ref.current.unsub(); ref.current.unsub = null; }
+      if (!user) { ref.current.col = null; setState({ mode: 'signin', settings: fillSettings(null), days: {}, error: '', user: null }); return; }
+      setState(function (s) { return Object.assign({}, s, { mode: 'loading', user: { name: user.displayName || '', email: user.email || '' } }); });
+      var col = fbDb.collection('users').doc(user.uid).collection('data');
+      ref.current.col = col;
+      ref.current.unsub = col.onSnapshot(function (snap) {
+        var days = {}, settings = null;
+        snap.docs.forEach(function (d) {
+          var v = d.data(); if (!v) return;
+          if (d.id === 'settings') settings = v;
+          else if (d.id.indexOf('d-') === 0) days[d.id.slice(2)] = v;
+        });
+        setState({ mode: 'db', settings: fillSettings(settings), days: days, error: '', user: { name: user.displayName || '', email: user.email || '' } });
+      }, function (err) {
+        setState(function (s) { return Object.assign({}, s, { mode: s.mode === 'loading' ? 'signin' : s.mode, error: 'データを読み込めませんでした（' + ((err && err.code) || 'エラー') + '）。Firebaseのルール設定を確認してください。' }); });
+      });
+    });
+    return function () { offAuth(); if (ref.current.unsub) ref.current.unsub(); };
+  }, []);
+
+  function persistLocal(next) { lsSet({ settings: next.settings, days: next.days }); }
+  function write(docId, data) {
+    var q = ref.current.queue;
+    var prev = q[docId] || Promise.resolve();
+    q[docId] = prev.then(function () { return ref.current.col.doc(docId).set(JSON.parse(JSON.stringify(data))); }).catch(function () {
+      setState(function (s) { return Object.assign({}, s, { error: '保存できませんでした。通信を確認してもう一度お試しください。' }); });
+    });
+  }
+  function setDay(date, updater) {
+    setState(function (s) {
+      var cur = s.days[date] ? JSON.parse(JSON.stringify(s.days[date])) : emptyDay(date);
+      var nextDay = updater(cur) || cur;
+      var days = Object.assign({}, s.days); days[date] = nextDay;
+      var next = Object.assign({}, s, { days: days });
+      if (s.mode === 'db') write('d-' + date, nextDay); else persistLocal(next);
+      return next;
+    });
+  }
+  function setSettings(updater) {
+    setState(function (s) {
+      var copy = JSON.parse(JSON.stringify(s.settings));
+      var ns = updater(copy) || copy;
+      var next = Object.assign({}, s, { settings: ns });
+      if (s.mode === 'db') write('settings', ns); else persistLocal(next);
+      return next;
+    });
+  }
+  function importAll(data) {
+    setState(function (s) {
+      var next = Object.assign({}, s, { settings: fillSettings(data.settings), days: data.days || {} });
+      if (s.mode === 'db') {
+        write('settings', next.settings);
+        Object.keys(next.days).forEach(function (k) { write('d-' + k, next.days[k]); });
+      } else persistLocal(next);
+      return next;
+    });
+  }
+  function signIn() {
+    var provider = new firebase.auth.GoogleAuthProvider();
+    fbAuth.signInWithPopup(provider).catch(function (e) {
+      if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) return fbAuth.signInWithRedirect(provider);
+      if (e && e.code === 'auth/popup-closed-by-user') return;
+      setState(function (s) { return Object.assign({}, s, { error: 'ログインできませんでした（' + ((e && e.code) || 'エラー') + '）' }); });
+    });
+  }
+  function signOut() { if (fbAuth) fbAuth.signOut(); }
+  function useLocalOnly() { setWantLocal(true); goLocal(); }
+  function useCloud() { setWantLocal(false); location.reload(); }
+  function clearError() { setState(function (s) { return Object.assign({}, s, { error: '' }); }); }
+  return { state: state, setDay: setDay, setSettings: setSettings, importAll: importAll, clearError: clearError, signIn: signIn, signOut: signOut, useLocalOnly: useLocalOnly, useCloud: useCloud };
+}
+
+
+/* ---------- 計算 ---------- */
+function getDay(days, date) { return days[date] || emptyDay(date); }
+function workApplies(settings, day) {
+  if (day.workOff === true) return false;
+  if (day.workOff === false) return true;
+  var d = parse(day.date).getDay();
+  if (settings.work.days.indexOf(d) === -1) return false;
+  if (settings.work.skipHoliday && isNatHoliday(day.date)) return false;
+  return true;
+}
+function planItems(settings, day) {
+  var items = [];
+  if (workApplies(settings, day)) items.push({ key: 'work', src: 'work', title: '仕事', cat: 'work', start: toMin(settings.work.start), end: toMin(settings.work.end) });
+  day.events.forEach(function (e) { if (!e.allDay && e.start) items.push({ key: 'e:' + e.id, src: 'event', id: e.id, title: e.title, cat: e.cat, start: toMin(e.start), end: Math.max(toMin(e.end || e.start), toMin(e.start) + 15) }); });
+  day.tasks.forEach(function (t) { if (t.start) items.push({ key: 't:' + t.id, src: 'task', id: t.id, title: t.title, cat: t.cat, start: toMin(t.start), end: toMin(t.end) || toMin(t.start) + (t.min || 30), done: t.done }); });
+  items.forEach(function (it) { if (it.end <= it.start) it.end += 1440; });
+  return items.sort(function (a, b) { return a.start - b.start; });
+}
+function actualItems(day) {
+  return day.actuals.map(function (a) { var s = toMin(a.start), e = toMin(a.end); if (e <= s) e += 1440; return { key: 'a:' + a.id, src: 'actual', id: a.id, link: a.link, title: a.title, cat: a.cat, start: s, end: e }; }).sort(function (a, b) { return a.start - b.start; });
+}
+function findConflicts(cm, cand, others) {
+  return others.filter(function (o) { return o.key !== cand.key && o.start < cand.end && cand.start < o.end && !canOverlap(cm, cand.cat, o.cat); });
+}
+function goalFor(settings, date) {
+  var g = isHoliday(date) ? settings.goal.holiday : settings.goal.weekday;
+  var b = toMin(g.bed), w = toMin(g.wake);
+  var m = w - b; if (m <= 0) m += 1440;
+  return { bed: g.bed, wake: g.wake, min: m, holiday: isHoliday(date) };
+}
+function sleepFor(days, date) {
+  var d = days[date], p = days[addDays(date, -1)];
+  if (!d || !d.wake || !p || !p.bed) return null;
+  var m = (d.wake - p.bed) / 60000;
+  if (m <= 0 || m > 20 * 60) return null;
+  return { min: Math.round(m), bed: p.bed, wake: d.wake };
+}
+function clockOf(ms) { var d = new Date(ms); return d.getHours() * 60 + d.getMinutes(); }
+function avg(arr) { if (!arr.length) return null; return arr.reduce(function (a, b) { return a + b; }, 0) / arr.length; }
+function taskStats(day) {
+  var c = day.tasks.filter(function (t) { return t.kind === 'chore'; }), t = day.tasks.filter(function (x) { return x.kind !== 'chore'; });
+  var cd = c.filter(function (x) { return x.done; }).length, td = t.filter(function (x) { return x.done; }).length;
+  return { total: day.tasks.length, done: cd + td, choreTotal: c.length, choreDone: cd, todoTotal: t.length, todoDone: td };
+}
+
+/* ---------- アイコン・イラスト ---------- */
+var I = {
+  gear: html`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>`,
+  back: html`<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>`,
+  plus: html`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>`,
+  warn: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warn-icon)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="M12 3 2 21h20z"></path><path d="M12 10v5M12 18h.01"></path></svg>`,
+  ok: html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg>`,
+  home: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"></path></svg>`,
+  cal: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>`,
+  clock: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>`,
+  list: html`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"></path><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11"></path><circle cx="5" cy="18" r="1.5"></circle></svg>`
+};
+var ART = {
+  sunrise: html`<svg width="104" height="64" viewBox="0 0 104 64" aria-hidden="true"><circle cx="66" cy="30" r="14" fill="#F6D77A"></circle><g fill="#F6D77A" opacity="0.6"><rect x="64.5" y="6" width="3" height="6" rx="1.5"></rect><rect x="84" y="28.5" width="6" height="3" rx="1.5"></rect><rect x="42" y="28.5" width="6" height="3" rx="1.5"></rect></g><path d="M0 64 Q26 30 56 46 T104 38 V64Z" fill="#CFE3D3"></path><path d="M0 64 Q40 44 74 56 T104 54 V64Z" fill="#A9D0B4"></path><g fill="#FFFFFF" opacity="0.9"><ellipse cx="22" cy="20" rx="12" ry="7"></ellipse><ellipse cx="31" cy="16" rx="9" ry="7"></ellipse></g></svg>`,
+  night: html`<svg width="104" height="64" viewBox="0 0 104 64" aria-hidden="true"><path d="M62 10a18 18 0 1 0 18 25A15 15 0 0 1 62 10z" fill="#F3D27A"></path><path d="M30 14l1.3 3 3 1.3-3 1.3-1.3 3-1.3-3-3-1.3 3-1.3z" fill="#ACAFD4"></path><path d="M90 20l1 2.2 2.2 1-2.2 1-1 2.2-1-2.2-2.2-1 2.2-1z" fill="#ACAFD4"></path><path d="M0 64 Q40 44 74 56 T104 54 V64Z" fill="#3F4466" opacity="0.5"></path></svg>`,
+  moon: html`<svg width="34" height="30" viewBox="0 0 34 30" aria-hidden="true"><path d="M17 3a12 12 0 1 0 12 17A10 10 0 0 1 17 3z" fill="#F3D27A"></path><path d="M27 4l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z" fill="#ACAFD4"></path><path d="M31 15l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z" fill="#ACAFD4"></path></svg>`,
+  clip: html`<svg width="30" height="32" viewBox="0 0 30 32" aria-hidden="true"><rect x="3" y="4" width="22" height="26" rx="4" fill="#EEE3D6"></rect><rect x="9" y="1" width="10" height="6" rx="2" fill="#B08A6A"></rect><path d="M8 15l3 3 6-6" fill="none" stroke="#8B5E3C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path><rect x="8" y="22" width="12" height="2.4" rx="1.2" fill="#D4BFA8"></rect></svg>`,
+  ticket: html`<svg width="40" height="34" viewBox="0 0 40 34" aria-hidden="true"><rect x="4" y="9" width="30" height="18" rx="3" fill="#FFFFFF" opacity="0.9" transform="rotate(-8 19 18)"></rect><circle cx="12" cy="19" r="2" fill="#5A5FAA" transform="rotate(-8 19 18)"></circle><rect x="17" y="15" width="13" height="2.4" rx="1.2" fill="#ACAFD4" transform="rotate(-8 19 18)"></rect><path d="M34 2l1.2 2.8 2.8 1.2-2.8 1.2-1.2 2.8-1.2-2.8-2.8-1.2 2.8-1.2z" fill="#F6D77A"></path></svg>`,
+  sleepy: html`<svg width="96" height="62" viewBox="0 0 96 62" aria-hidden="true"><path d="M56 4a20 20 0 1 0 20 28A17 17 0 0 1 56 4z" fill="#F3D27A"></path><path d="M80 8l1.4 3.2 3.2 1.4-3.2 1.4-1.4 3.2-1.4-3.2-3.2-1.4 3.2-1.4z" fill="#ACAFD4"></path><path d="M28 14l1 2.2 2.2 1-2.2 1-1 2.2-1-2.2-2.2-1 2.2-1z" fill="#ACAFD4"></path><g fill="#ACAFD4" opacity="0.45"><ellipse cx="34" cy="50" rx="20" ry="10"></ellipse><ellipse cx="54" cy="46" rx="16" ry="12"></ellipse><ellipse cx="72" cy="52" rx="14" ry="8"></ellipse></g></svg>`,
+  notebook: html`<svg width="40" height="44" viewBox="0 0 40 44" aria-hidden="true" style="flex:none"><rect x="4" y="4" width="28" height="36" rx="4" fill="#FBF1D0"></rect><rect x="4" y="4" width="6" height="36" rx="3" fill="#E8C55A"></rect><rect x="14" y="13" width="13" height="2.4" rx="1.2" fill="#D9C27E"></rect><rect x="14" y="19" width="10" height="2.4" rx="1.2" fill="#D9C27E"></rect><path d="M30 30l7-7 3 3-7 7-4 1z" fill="#ACAFD4"></path></svg>`,
+  trophy: html`<svg width="70" height="60" viewBox="0 0 70 60" aria-hidden="true"><path d="M22 8h26v14a13 13 0 0 1-26 0z" fill="#F6D77A"></path><path d="M22 12h-7a7 7 0 0 0 7 9M48 12h7a7 7 0 0 1-7 9" fill="none" stroke="#E8C55A" stroke-width="3"></path><rect x="32" y="34" width="6" height="10" fill="#E8C55A"></rect><rect x="24" y="44" width="22" height="7" rx="2" fill="#B08A6A"></rect><path d="M60 6l1.3 3 3 1.3-3 1.3-1.3 3-1.3-3-3-1.3 3-1.3z" fill="#ACAFD4"></path></svg>`,
+  broom: html`<svg width="54" height="48" viewBox="0 0 54 48" aria-hidden="true"><rect x="10" y="20" width="16" height="22" rx="3" fill="#EEE3D6"></rect><path d="M13 20c0-6 10-6 10 0" fill="none" stroke="#B08A6A" stroke-width="2.4"></path><circle cx="38" cy="30" r="10" fill="#E1F0E6"></circle><path d="M33 30l3.5 3.5 6-7" fill="none" stroke="#3E8A5E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M44 8l1.3 3 3 1.3-3 1.3-1.3 3-1.3-3-3-1.3 3-1.3z" fill="#F6D77A"></path></svg>`,
+  calendar: html`<svg width="42" height="40" viewBox="0 0 42 40" aria-hidden="true"><rect x="3" y="7" width="30" height="28" rx="5" fill="#EEEFF7"></rect><rect x="3" y="7" width="30" height="9" rx="4" fill="#ACAFD4"></rect><rect x="10" y="3" width="3" height="8" rx="1.5" fill="#5A5FAA"></rect><rect x="23" y="3" width="3" height="8" rx="1.5" fill="#5A5FAA"></rect><circle cx="13" cy="25" r="3" fill="#5A5FAA"></circle><path d="M36 22l1.3 3 3 1.3-3 1.3-1.3 3-1.3-3-3-1.3 3-1.3z" fill="#F6D77A"></path></svg>`,
+  washer: html`<svg width="44" height="40" viewBox="0 0 44 40" aria-hidden="true"><rect x="4" y="14" width="26" height="22" rx="5" fill="#EEE3D6"></rect><circle cx="17" cy="25" r="6.5" fill="#FFFFFF"></circle><circle cx="17" cy="25" r="4" fill="#C8E3F0"></circle><path d="M34 6v22" stroke="#B08A6A" stroke-width="2.4" stroke-linecap="round"></path><path d="M30 28h8l2 8h-12z" fill="#E8C55A"></path></svg>`,
+  sunmoon: html`<svg width="110" height="64" viewBox="0 0 110 64" aria-hidden="true"><path d="M8 58 Q55 -6 102 58" fill="none" stroke="#ACAFD4" stroke-opacity="0.5" stroke-width="2" stroke-dasharray="4 5"></path><path d="M24 18a12 12 0 1 0 12 17A10 10 0 0 1 24 18z" fill="#F3D27A"></path><circle cx="86" cy="30" r="10" fill="#F6D77A"></circle></svg>`
+};
+
+/* ---------- 共通部品 ---------- */
+function Sheet(props) {
+  useEffect(function () {
+    function onKey(e) { if (e.key === 'Escape') props.onClose(); }
+    document.addEventListener('keydown', onKey);
+    return function () { document.removeEventListener('keydown', onKey); };
+  }, []);
+  return html`<div>
+    <button class="scrim" aria-label="閉じる" onClick=${props.onClose}></button>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label=${props.title}>
+      <div class="grab"></div>
+      ${props.children}
+    </div>
+  </div>`;
+}
+function Seg(props) {
+  return html`<div class="seg" role="group" aria-label=${props.label}>${props.options.map(function (o) {
+    return html`<button aria-pressed=${String(props.value === o[0])} onClick=${function () { props.onChange(o[0]); }}>${o[1]}</button>`;
+  })}</div>`;
+}
+function Switch(props) {
+  return html`<button class="switch" role="switch" aria-checked=${String(!!props.on)} aria-label=${props.label} onClick=${function () { props.onChange(!props.on); }}></button>`;
+}
+function Gear(props) { return html`<button class="iconbtn" aria-label="設定" onClick=${props.onClick}>${I.gear}</button>`; }
+function DateNav(props) {
+  var isToday = props.date === todayStr();
+  return html`<div class="top">
+    <div class="datenav">
+      <button class="iconbtn plain" aria-label="前の日" onClick=${function () { props.onChange(addDays(props.date, -1)); }}>‹</button>
+      <span class="title">${jpDate(props.date)}</span>
+      <button class="iconbtn plain" aria-label="次の日" onClick=${function () { props.onChange(addDays(props.date, 1)); }}>›</button>
+      ${!isToday && html`<button class="todaybtn" onClick=${function () { props.onChange(todayStr()); }}>今日</button>`}
+    </div>
+    <${Gear} onClick=${props.onGear} />
+  </div>`;
+}
+function CatChips(props) {
+  var cm = catMap(props.settings);
+  var tops = props.settings.cats.filter(function (c) { return !c.parent; });
+  var cur = cm[props.value];
+  var curRoot = cur ? (cur.parent || cur.id) : null;
+  var subs = props.settings.cats.filter(function (c) { return c.parent && c.parent === curRoot; });
+  return html`<div class="stack">
+    <div class="chips">${tops.map(function (c) {
+      return html`<button class="chip" style=${'--c:' + c.color} aria-pressed=${String(curRoot === c.id)} onClick=${function () {
+        var s = props.settings.cats.filter(function (x) { return x.parent === c.id; });
+        props.onChange(s.length ? s[0].id : c.id);
+      }}><span class="dot"></span>${c.name}</button>`;
+    })}</div>
+    ${subs.length > 0 && html`<div class="stack" style="background:var(--surface-2);border-radius:12px;padding:10px">
+      <span class="label">${cm[curRoot].name}の種類</span>
+      <div class="chips">${subs.map(function (c) {
+        return html`<button class="chip" style=${'--c:' + c.color} aria-pressed=${String(props.value === c.id)} onClick=${function () { props.onChange(c.id); }}><span class="dot"></span>${c.name}</button>`;
+      })}</div>
+    </div>`}
+  </div>`;
+}
+function ConflictNote(props) {
+  if (!props.list || !props.list.length) {
+    if (props.okText) return html`<div class="okbox">${I.ok}<span>${props.okText}</span></div>`;
+    return null;
+  }
+  var cm = props.cm;
+  return html`<div class="warnbox" role="alert">${I.warn}<span>${props.list.map(function (o) { return hm(o.start) + '〜' + hm(o.end) + ' の「' + o.title + '」（' + catName(cm, o.cat) + '）'; }).join('、')} と重なっています。このまま保存することもできます。</span></div>`;
+}
+function Ring(props) {
+  var circ = 2 * Math.PI * 23, frac = props.total ? props.done / props.total : 0;
+  return html`<svg width="58" height="58" viewBox="0 0 58 58" role="img" aria-label=${props.total + '件中' + props.done + '件完了'}>
+    <circle cx="29" cy="29" r="23" fill="none" stroke="var(--line-2)" stroke-width="7"></circle>
+    ${frac > 0 && html`<circle cx="29" cy="29" r="23" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray=${(circ * frac) + ' ' + circ} transform="rotate(-90 29 29)"></circle>`}
+    <text x="29" y="34" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="14" font-weight="600" fill="var(--fg)">${props.done}/${props.total}</text>
+  </svg>`;
+}
+
+/* ---------- ホーム ---------- */
+function Home(props) {
+  var s = props.store.state, settings = s.settings, cm = catMap(settings);
+  var t = todayStr(), day = getDay(s.days, t);
+  var sl = sleepFor(s.days, t);
+  var goal = goalFor(settings, t);
+  var stats = taskStats(day);
+  var hour = new Date().getHours();
+  var greet = hour < 5 ? 'こんばんは' : hour < 11 ? 'おはようございます' : hour < 18 ? 'こんにちは' : 'こんばんは';
+  var events = day.events.slice().sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); });
+  var next = null;
+  for (var i = 1; i <= 90 && !next; i++) {
+    var dd = addDays(t, i), d = s.days[dd];
+    if (d && d.events.length) { var e = d.events.slice().sort(function (a, b) { return (toMin(a.start) || 0) - (toMin(b.start) || 0); })[0]; next = { date: dd, ev: e, days: i }; }
+  }
+  return html`<div class="app">
+    <div class="top">
+      <div class="stack" style="gap:0">
+        <span class="muted" style="font-size:13px">${parse(t).getFullYear()}年</span>
+        <span style="font-size:26px;font-weight:700;line-height:1.2">${jpDate(t, false)}<span style="font-size:16px;font-weight:500;margin-left:6px">${DOW[parse(t).getDay()]}曜日</span></span>
+        <span style="font-size:13px;color:var(--fg-2)">${greet}</span>
+      </div>
+      <div class="row" style="gap:4px">${hour >= 18 || hour < 5 ? ART.night : ART.sunrise}<${Gear} onClick=${props.onGear} /></div>
+    </div>
+    ${props.banner}
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+      <button class="card" style="border:none;text-align:left;gap:6px" onClick=${props.onSleep}>
+        <span class="between label">昨日の睡眠<span style="color:var(--accent);font-weight:700">記録 ›</span></span>
+        <span class="between"><span class="big">${sl ? html`${Math.floor(sl.min / 60)}<small>h</small>${pad(sl.min % 60)}<small>m</small>` : '--'}</span>${ART.moon}</span>
+        ${sl ? html`<span style="font-size:12px;font-weight:500" class=${sl.min >= goal.min ? 't-good' : 't-bad'}>目標より ${signed(sl.min - goal.min)}</span>
+          <div class="bar"><div style=${'width:' + clamp(sl.min / goal.min * 100, 0, 100) + '%'}></div></div>
+          <span class="num muted" style="font-size:11px">${hm(clockOf(sl.bed))} → ${hm(clockOf(sl.wake))}</span>`
+        : html`<span class="muted" style="font-size:12px">時間割の実績で「寝る」「起きた」を押すと記録されます</span>`}
+      </button>
+      <button class="card" style="border:none;text-align:left;gap:6px" onClick=${props.onTodo}>
+        <span class="label">今日のToDo</span>
+        <span class="between"><span style="font-size:14px;line-height:1.1">あと<span class="big" style="margin:0 2px">${stats.total - stats.done}</span>件</span>${ART.clip}</span>
+        <span class="muted" style="font-size:12px">${stats.total}件中 ${stats.done}件完了</span>
+        <div class="bar"><div style=${'width:' + (stats.total ? stats.done / stats.total * 100 : 0) + '%'}></div></div>
+        <span class="muted" style="font-size:11px">家事 ${stats.choreDone}/${stats.choreTotal}・ToDo ${stats.todoDone}/${stats.todoTotal}</span>
+      </button>
+    </div>
+    <div class="card">
+      <div class="between"><span class="h2">今日の予定</span><span class="muted" style="font-size:12px">${events.length}件</span></div>
+      ${events.length ? events.map(function (e) {
+        return html`<button class="evrow" style=${'--c:' + colorOf(cm, e.cat)} onClick=${function () { props.onEditEvent(t, e); }}>
+          <span class="time">${e.allDay ? '終日' : e.start}</span>
+          <span class="body"><b>${e.title}</b><span>${e.allDay ? '' : e.start + '〜' + (e.end || '') + '・'}${catName(cm, e.cat)}</span></span>
+        </button>`;
+      }) : html`<div class="empty">${ART.calendar}<span>今日の予定はありません。マンスリーの＋から追加できます。</span></div>`}
+    </div>
+    ${next && html`<div class="stack">
+      <span class="label" style="font-size:13px">次の予定</span>
+      <button class="card" style=${'border:none;text-align:left;flex-direction:row;align-items:center;justify-content:space-between;background:' + colorOf(cm, next.ev.cat) + ';color:' + inkFor(colorOf(cm, next.ev.cat))} onClick=${function () { props.onEditEvent(next.date, next.ev); }}>
+        <span class="stack" style="gap:2px"><span style="font-size:12px;opacity:.85">${jpDate(next.date)}${next.ev.allDay ? '' : ' ' + next.ev.start}</span><span style="font-size:15px;font-weight:700">${next.ev.title}</span></span>
+        <span class="row"><span style="font-size:13px;font-weight:500">${next.days === 1 ? '明日' : 'あと' + next.days + '日'}</span>${ART.ticket}</span>
+      </button>
+    </div>`}
+  </div>`;
+}
+
+/* ---------- マンスリー ---------- */
+function monthCells(y, m) {
+  var first = new Date(y, m, 1), start = new Date(y, m, 1 - first.getDay());
+  var cells = [];
+  for (var i = 0; i < 42; i++) { var d = new Date(start); d.setDate(start.getDate() + i); cells.push({ date: ymd(d), out: d.getMonth() !== m, dow: d.getDay(), n: d.getDate() }); }
+  if (cells.slice(35).every(function (c) { return c.out; })) cells = cells.slice(0, 35);
+  return cells;
+}
+function Monthly(props) {
+  var s = props.store.state, settings = s.settings, cm = catMap(settings);
+  var sel = props.selDate, setSel = props.setSelDate;
+  var ym = useState(function () { var d = parse(sel); return [d.getFullYear(), d.getMonth()]; });
+  var y = ym[0][0], m = ym[0][1];
+  function move(n) { var d = new Date(y, m + n, 1); ym[1]([d.getFullYear(), d.getMonth()]); }
+  var cells = monthCells(y, m);
+  var t = todayStr();
+  var day = getDay(s.days, sel);
+  var sleeps = cells.filter(function (c) { return !c.out; }).map(function (c) { var x = sleepFor(s.days, c.date); return x ? x.min : null; }).filter(function (v) { return v != null; });
+  var monthAvg = avg(sleeps);
+  var noteState = useState(null); var editingNote = noteState[0], setEditingNote = noteState[1];
+
+  return html`<div class="app">
+    <div class="top">
+      <div class="datenav">
+        <button class="iconbtn plain" aria-label="前の月" onClick=${function () { move(-1); }}>‹</button>
+        <span class="title" style="font-size:22px">${y}年 ${m + 1}月</span>
+        <button class="iconbtn plain" aria-label="次の月" onClick=${function () { move(1); }}>›</button>
+      </div>
+      <${Gear} onClick=${props.onGear} />
+    </div>
+    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['plan', '予定'], ['actual', '実績']]} />
+    ${props.sub === 'actual' && html`<button class="card tight" style="border:none;flex-direction:row;align-items:center;gap:12px;text-align:left" onClick=${props.onSleep}>
+      ${ART.moon}
+      <span class="stack" style="gap:0;flex-grow:1"><span class="label" style="font-size:11px">今月の平均睡眠</span><span class="num" style="font-size:18px;font-weight:600">${monthAvg != null ? dur(monthAvg) : '--'}</span></span>
+      <span style="font-size:13px;font-weight:700;color:var(--accent)">睡眠の記録 ›</span>
+    </button>`}
+    <div class="cal">
+      <div class="cal-head">${DOW.map(function (d) { return html`<span>${d}</span>`; })}</div>
+      <div class="cal-grid">${cells.map(function (c) {
+        var d = s.days[c.date];
+        var cls = 'cell' + (c.date === sel ? ' sel' : '') + (c.date === t ? ' today' : '') + (c.out ? ' out' : '');
+        var dcls = 'd' + (c.dow === 0 || isNatHoliday(c.date) ? ' sun' : c.dow === 6 ? ' sat' : '');
+        var body;
+        if (props.sub === 'plan') {
+          var evs = d ? d.events.slice().sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); }) : [];
+          body = html`${evs.slice(0, 2).map(function (e) { return html`<span class="ev" style=${'--c:' + colorOf(cm, e.cat)}>${e.title}</span>`; })}${evs.length > 2 && html`<span class="more">ほか${evs.length - 2}件</span>`}`;
+        } else {
+          var sl = sleepFor(s.days, c.date);
+          body = html`${sl && html`<span class="sl">${hm(sl.min)}</span>`}${d && d.note && html`<span class="note">${d.note.split('\n')[0]}</span>`}`;
+        }
+        return html`<button class=${cls} aria-label=${jpDate(c.date)} onClick=${function () { setSel(c.date); if (c.out) { var dd = parse(c.date); ym[1]([dd.getFullYear(), dd.getMonth()]); } }}><span class=${dcls}>${c.n}</span>${body}</button>`;
+      })}</div>
+    </div>
+
+    ${props.sub === 'plan' ? html`<div class="card">
+      <div class="between"><span class="h2">${jpDate(sel)}${isNatHoliday(sel) ? '・祝日' : ''}</span>
+        <button class="btn small ghost" onClick=${function () { props.onTimetable(sel); }}>時間割を見る</button></div>
+      ${day.events.length ? day.events.slice().sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); }).map(function (e) {
+        return html`<button class="evrow" style=${'--c:' + colorOf(cm, e.cat)} onClick=${function () { props.onEditEvent(sel, e); }}>
+          <span class="time">${e.allDay ? '終日' : e.start + '–' + (e.end || '')}</span>
+          <span class="body"><b>${e.title}</b><span>${catName(cm, e.cat)}${e.memo ? '／' + e.memo : ''}</span></span>
+        </button>`;
+      }) : html`<div class="empty">${ART.calendar}<span>予定はありません。右下の＋で追加できます。</span></div>`}
+    </div>` : html`<div class="card" style="flex-direction:row;align-items:flex-start;gap:12px">
+      ${ART.notebook}
+      <div class="stack" style="flex-grow:1;min-width:0;gap:6px">
+        <div class="between"><span class="h2" style="font-size:14px">${jpDate(sel)}</span>
+          ${(function () { var sl = sleepFor(s.days, sel); return html`<button style="border:none;background:none;padding:4px;font-size:12px;color:var(--accent);font-weight:500" onClick=${props.onSleep}>睡眠 <span class="num" style="font-weight:600">${sl ? dur(sl.min) : '--'}</span> ›</button>`; })()}
+        </div>
+        ${editingNote != null ? html`<label class="sr" for="note-input">あった出来事</label>
+          <textarea id="note-input" class="input" value=${editingNote} onInput=${function (e) { setEditingNote(e.target.value); }} placeholder="例：駅前の新しいカフェに行った"></textarea>
+          <div class="btns"><button class="btn sub" onClick=${function () { setEditingNote(null); }}>キャンセル</button>
+          <button class="btn" onClick=${function () { var v = editingNote; props.store.setDay(sel, function (d) { d.note = v; return d; }); setEditingNote(null); props.toast('出来事を保存しました'); }}>保存</button></div>`
+        : html`<span style="font-size:13px;line-height:1.7;color:var(--fg-2);white-space:pre-wrap;overflow-wrap:anywhere">${day.note || 'まだ書いていません。'}</span>
+          <button class="btn small ghost" style="align-self:flex-start" onClick=${function () { setEditingNote(day.note || ''); }}>${day.note ? '出来事を編集' : '出来事を書く'}</button>`}
+      </div>
+    </div>`}
+    ${props.sub === 'plan' && html`<button class="fab" aria-label="予定を追加" onClick=${function () { props.onNewEvent(sel); }}>${I.plus}</button>`}
+  </div>`;
+}
+
+/* ---------- 予定の追加・編集 ---------- */
+function EventSheet(props) {
+  var settings = props.settings, cm = catMap(settings);
+  var init = props.event || { id: null, title: '', cat: 'other', allDay: false, start: '10:00', end: '11:00', memo: '' };
+  var f = useState({ date: props.date, title: init.title, cat: init.cat, allDay: !!init.allDay, start: init.start || '10:00', end: init.end || '11:00', memo: init.memo || '' });
+  var v = f[0], set = function (k, val) { var n = Object.assign({}, v); n[k] = val; f[1](n); };
+  var del = useState(false);
+  var day = getDay(props.days, v.date);
+  var others = planItems(settings, day).filter(function (o) { return !(o.src === 'event' && o.id === init.id); });
+  var cand = { key: 'new', cat: v.cat, start: toMin(v.start), end: toMin(v.end) > toMin(v.start) ? toMin(v.end) : toMin(v.end) + 1440 };
+  var conflicts = v.allDay ? [] : findConflicts(cm, cand, others);
+  var overlapsOk = v.allDay ? [] : others.filter(function (o) { return o.start < cand.end && cand.start < o.end && canOverlap(cm, v.cat, o.cat); });
+  function save() {
+    if (!v.title.trim()) return;
+    var ev = { id: init.id || uid(), title: v.title.trim(), cat: v.cat, allDay: v.allDay, start: v.allDay ? null : v.start, end: v.allDay ? null : v.end, memo: v.memo };
+    if (init.id && props.date !== v.date) props.store.setDay(props.date, function (d) { d.events = d.events.filter(function (e) { return e.id !== init.id; }); return d; });
+    props.store.setDay(v.date, function (d) {
+      var i = d.events.findIndex(function (e) { return e.id === ev.id; });
+      if (i >= 0) d.events[i] = ev; else d.events.push(ev);
+      return d;
+    });
+    props.toast(init.id ? '予定を保存しました' : '予定を追加しました');
+    props.onClose();
+  }
+  function remove() {
+    props.store.setDay(props.date, function (d) { d.events = d.events.filter(function (e) { return e.id !== init.id; }); return d; });
+    props.toast('予定を削除しました'); props.onClose();
+  }
+  return html`<${Sheet} title=${init.id ? '予定を編集' : '予定を追加'} onClose=${props.onClose}>
+    <div class="row" style="gap:10px">${ART.calendar}<h2 class="h2" style="font-size:18px">${init.id ? '予定を編集' : '予定を追加'}</h2></div>
+    <label class="field" for="ev-title">タイトル<input id="ev-title" class="input" value=${v.title} onInput=${function (e) { set('title', e.target.value); }} placeholder="例：歯医者" /></label>
+    <div class="group">
+      <div class="between"><label for="ev-date" style="font-size:14px">日付</label><input id="ev-date" type="date" class="timein" value=${v.date} onChange=${function (e) { if (e.target.value) set('date', e.target.value); }} /></div>
+      <div class="between"><span style="font-size:14px">終日</span><${Switch} label="終日" on=${v.allDay} onChange=${function (x) { set('allDay', x); }} /></div>
+      ${!v.allDay && html`<div class="between"><span style="font-size:14px">時間</span><span class="row" style="gap:6px">
+        <label class="sr" for="ev-start">開始</label><input id="ev-start" type="time" class="timein" value=${v.start} onChange=${function (e) { if (e.target.value) set('start', e.target.value); }} />
+        <span class="muted">〜</span>
+        <label class="sr" for="ev-end">終了</label><input id="ev-end" type="time" class="timein" value=${v.end} onChange=${function (e) { if (e.target.value) set('end', e.target.value); }} />
+      </span></div>`}
+    </div>
+    <div class="stack"><span class="label">カテゴリ</span><${CatChips} settings=${settings} value=${v.cat} onChange=${function (c) { set('cat', c); }} /></div>
+    <${ConflictNote} cm=${cm} list=${conflicts} okText=${overlapsOk.length ? overlapsOk.map(function (o) { return '「' + o.title + '」'; }).join('、') + 'と時間が重なりますが、重なってOKの組み合わせです。' : ''} />
+    <label class="field" for="ev-memo">場所・メモ<input id="ev-memo" class="input" value=${v.memo} onInput=${function (e) { set('memo', e.target.value); }} placeholder="例：会場名、持ち物" /></label>
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" disabled=${!v.title.trim()} style=${v.title.trim() ? '' : 'opacity:.5'} onClick=${save}>${conflicts.length ? 'このまま保存' : '保存'}</button></div>
+    ${init.id && (del[0] ? html`<div class="btns"><button class="btn sub" onClick=${function () { del[1](false); }}>やめる</button><button class="btn danger" onClick=${remove}>本当に削除する</button></div>`
+      : html`<button class="btn danger" onClick=${function () { del[1](true); }}>この予定を削除</button>`)}
+  </${Sheet}>`;
+}
+
+/* ---------- 時間割 ---------- */
+function layoutColumn(cm, items, opts) {
+  // opts: left, width, pxPerMin, h0
+  var bands = [], bases = [], rest = [];
+  items.forEach(function (it) {
+    if (isBand(cm, it.cat)) bands.push(it);
+    else if (it.src === 'work' || (it.link === 'work')) bases.push(it);
+    else rest.push(it);
+  });
+  var out = [];
+  bases.forEach(function (b) { out.push({ it: b, role: 'base', left: opts.left, width: opts.width }); });
+  rest.sort(function (a, b) { return a.start - b.start || b.end - a.end; });
+  var clusters = [], cur = null;
+  rest.forEach(function (it) {
+    if (!cur || it.start >= cur.end) { cur = { items: [], end: it.end }; clusters.push(cur); }
+    cur.items.push(it); cur.end = Math.max(cur.end, it.end);
+  });
+  clusters.forEach(function (cl) {
+    var lanes = [];
+    cl.items.forEach(function (it) {
+      var li = lanes.findIndex(function (end) { return end <= it.start; });
+      if (li === -1) { li = lanes.length; lanes.push(it.end); } else lanes[li] = it.end;
+      it._lane = li;
+    });
+    var n = lanes.length;
+    cl.items.forEach(function (it) {
+      var inBase = bases.some(function (b) { return b.start < it.end && it.start < b.end; });
+      var off = inBase ? opts.width * 0.16 : 0;
+      var w = (opts.width - off) / n;
+      var sameBase = inBase && bases.some(function (b) { return rootOf(cm, b.cat).id === rootOf(cm, it.cat).id; });
+      out.push({ it: it, role: sameBase ? 'same' : (inBase ? 'inner' : ''), left: opts.left + off + w * it._lane, width: w - 2 });
+    });
+  });
+  return { blocks: out, bands: bands };
+}
+function Timeline(props) {
+  // props: columns [{items, kind:'plan'|'act'|'both', label}], marks, now, cm, onBlock, compact
+  var cm = props.cm;
+  var all = [];
+  props.columns.forEach(function (c) { all = all.concat(c.items); });
+  var minS = all.length ? Math.min.apply(null, all.map(function (i) { return i.start; })) : 360;
+  var maxE = all.length ? Math.max.apply(null, all.map(function (i) { return i.end; })) : 1440;
+  (props.marks || []).forEach(function (mk) { minS = Math.min(minS, mk.min); maxE = Math.max(maxE, mk.min); });
+  var h0 = Math.min(5, Math.floor(minS / 60)), h1 = Math.max(24, Math.ceil(maxE / 60));
+  var PX = props.compact ? 0.5 : 0.7;
+  var TOP = props.columns.length > 1 ? 30 : 16;
+  var y = function (m) { return TOP + (m - h0 * 60) * PX; };
+  var height = y(h1 * 60) + 16;
+  var W = props.width || 340;
+  var AREA_L = 50, AREA_W = W - AREA_L - 22;
+  var colW = AREA_W / props.columns.length;
+  var hours = [];
+  for (var h = h0; h <= h1; h++) if (h % (props.compact ? 2 : 1) === 0) hours.push(h);
+  var ref = useRef(null);
+  var sz = useState(W);
+  useEffect(function () {
+    function measure() { if (ref.current) sz[1](ref.current.clientWidth); }
+    measure(); window.addEventListener('resize', measure);
+    return function () { window.removeEventListener('resize', measure); };
+  }, []);
+  W = sz[0] || W; AREA_W = W - AREA_L - 22; colW = AREA_W / props.columns.length;
+
+  return html`<div class="tl" ref=${ref} style=${'height:' + height + 'px'}>
+    ${props.columns.length > 1 && props.columns.map(function (c, i) { return html`<span style=${'position:absolute;top:8px;text-align:center;font-size:12px;font-weight:700;color:var(--fg-2);left:' + (AREA_L + colW * i) + 'px;width:' + colW + 'px'}>${c.label}</span>`; })}
+    ${hours.map(function (h) { return html`<span class="hl" style=${'top:' + y(h * 60) + 'px'}>${(h % 24) + ':00'}</span><div class="hr" style=${'top:' + y(h * 60) + 'px'}></div>`; })}
+    ${props.columns.length > 1 && html`<div style=${'position:absolute;top:28px;bottom:8px;border-left:1px solid var(--line);left:' + (AREA_L + colW - 1) + 'px'}></div>`}
+    ${props.columns.map(function (col, ci) {
+      var L = AREA_L + colW * ci + (props.columns.length > 1 ? 2 : 0);
+      var CW = colW - (props.columns.length > 1 ? 14 : 4);
+      var lay = layoutColumn(cm, col.items, { left: L, width: CW });
+      var act = col.kind === 'act';
+      return html`${lay.blocks.map(function (b) {
+        var it = b.it, color = colorOf(cm, it.cat);
+        var top = y(it.start), hgt = Math.max(props.compact ? 14 : 26, (it.end - it.start) * PX - 2);
+        var cls = 'blk ' + (b.role === 'base' ? 'base' : act ? 'act' : 'plan') + (b.role === 'same' ? ' same' : '') + (b.role === 'inner' ? ' inner' : '') + (props.dashed && !act ? ' dashed' : '');
+        var z = b.role === 'base' ? 1 : 2;
+        var warn = col.warn && col.warn[it.key];
+        var style = '--c:' + color + ';--ink:' + inkFor(color) + ';top:' + top + 'px;height:' + hgt + 'px;left:' + b.left + 'px;width:' + Math.max(20, b.width) + 'px;z-index:' + z;
+        return html`<button class=${cls} style=${style} onClick=${function () { props.onBlock && props.onBlock(it, col.kind); }} aria-label=${it.title + ' ' + hm(it.start) + '〜' + hm(it.end)}>
+          <b>${it.title}${warn && I.warn}${it.done && ' ✓'}</b>
+          ${!props.compact && hgt >= 26 && html`<span>${hm(it.start)}–${hm(it.end)}</span>`}
+        </button>`;
+      })}
+      ${lay.bands.map(function (it, bi) {
+        var color = colorOf(cm, it.cat);
+        var top = y(it.start), hgt = Math.max(8, (it.end - it.start) * PX);
+        var x = L + CW + 4 + (bi % 2) * 0;
+        return html`<button class="band" style=${'--c:' + color + ';top:' + top + 'px;height:' + hgt + 'px;left:' + x + 'px;z-index:4'} aria-label=${it.title + ' ' + hm(it.start) + '〜' + hm(it.end)} onClick=${function () { props.onBlock && props.onBlock(it, col.kind); }}></button>
+          ${!props.compact && html`<span class="bandlabel" style=${'--c:' + color + ';top:' + top + 'px;right:' + (W - x + 4) + 'px;z-index:4'}>${it.title} ${hm(it.start)}</span>`}`;
+      })}`;
+    })}
+    ${(props.marks || []).map(function (mk) {
+      var ci = mk.col || 0;
+      var left = props.columns.length > 1 ? AREA_L + colW * ci : 46;
+      var width = props.columns.length > 1 ? colW - 4 : W - 46 - 8;
+      return html`<div class=${'mark' + (mk.solid ? ' solid' : '')} style=${'top:' + y(mk.min) + 'px;left:' + left + 'px;width:' + width + 'px'}>${mk.label && html`<span>${mk.label}</span>`}</div>`;
+    })}
+    ${props.now != null && props.now >= h0 * 60 && props.now <= h1 * 60 && html`<div class="nowline" style=${'top:' + y(props.now) + 'px;left:40px;right:8px'}><span>いま ${hm(props.now)}</span></div>`}
+  </div>`;
+}
+
+function Timetable(props) {
+  var s = props.store.state, settings = s.settings, cm = catMap(settings);
+  var date = props.date, day = getDay(s.days, date);
+  var plan = planItems(settings, day), acts = actualItems(day);
+  var goal = goalFor(settings, date);
+  var isToday = date === todayStr(), isPast = date < todayStr();
+  var nm = isToday ? nowMin() : null;
+  var warn = {};
+  plan.forEach(function (it) { if (findConflicts(cm, it, plan).length) warn[it.key] = true; });
+  var bedGoal = toMin(goal.bed); if (bedGoal < 12 * 60) bedGoal += 1440;
+  var tick = useState(0);
+  useEffect(function () { var t = setInterval(function () { tick[1](function (x) { return x + 1; }); }, 60000); return function () { clearInterval(t); }; }, []);
+
+  var recorded = {};
+  acts.forEach(function (a) { if (a.link) recorded[a.link] = true; });
+  var pending = plan.filter(function (p) { return !recorded[p.key] && !isBand(cm, p.cat) && (isPast || (isToday && p.end <= nowMin())); });
+  var prev = getDay(s.days, addDays(date, -1));
+
+  function recordAsPlanned(p) {
+    props.store.setDay(date, function (d) {
+      d.actuals.push({ id: uid(), link: p.key, title: p.title, cat: p.cat, start: hm2(p.start), end: hm2(p.end) });
+      if (p.src === 'task') d.tasks.forEach(function (t) { if (t.id === p.id) { t.done = true; t.doneAt = Date.now(); } });
+      return d;
+    });
+    props.toast('「' + p.title + '」を記録しました');
+  }
+  function pressWake() { var now = new Date(); props.store.setDay(ymd(now), function (d) { d.wake = now.getTime(); return d; }); props.toast('起床 ' + hm(nowMin()) + ' を記録しました'); }
+  function pressBed() { var now = new Date(); var night = now.getHours() < 12 ? addDays(ymd(now), -1) : ymd(now); props.store.setDay(night, function (d) { d.bed = now.getTime(); return d; }); props.toast('就寝 ' + hm(nowMin()) + ' を記録しました'); }
+
+  function onBlock(it, kind) {
+    if (kind === 'act' || it.src === 'actual') props.openActual(date, it);
+    else if (it.src === 'event') { var e = day.events.find(function (x) { return x.id === it.id; }); if (e) props.onEditEvent(date, e); }
+    else if (it.src === 'task') { var t = day.tasks.find(function (x) { return x.id === it.id; }); if (t) props.openTask(date, t); }
+    else if (it.src === 'work') props.openWork(date);
+  }
+
+  var wakeMs = day.wake, bedMs = day.bed;
+  var marksPlan = [{ min: toMin(goal.wake), label: '起床（目標）' + goal.wake }, { min: bedGoal, label: '就寝（目標）' + goal.bed }];
+  var marksAct = [];
+  if (wakeMs) marksAct.push({ min: clockOf(wakeMs), label: '起床 ' + hm(clockOf(wakeMs)), solid: true });
+  if (bedMs) { var bm = clockOf(bedMs); if (bm < 12 * 60) bm += 1440; marksAct.push({ min: bm, label: '就寝 ' + hm(bm), solid: true }); }
+
+  var body;
+  if (props.sub === 'plan') {
+    body = html`
+      ${!workApplies(settings, day) && settings.work.days.indexOf(parse(date).getDay()) !== -1 && html`<div class="banner">この日は仕事の定例予定を外しています。<button class="btn small ghost" style="margin-left:6px" onClick=${function () { props.store.setDay(date, function (d) { d.workOff = false; return d; }); }}>仕事を入れる</button></div>`}
+      <${Timeline} cm=${cm} columns=${[{ items: plan, kind: 'plan', warn: warn }]} marks=${marksPlan} now=${nm} onBlock=${onBlock} />
+      <p class="muted" style="font-size:11px;margin:0">⚠ はルール上、重ならないほうがよい予定です。予定をタップすると編集できます。</p>`;
+  } else if (props.sub === 'actual') {
+    var sl = sleepFor(s.days, date);
+    body = html`
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        <button class="card tight" style="border:none;flex-direction:row;align-items:center;gap:10px;text-align:left;background:color-mix(in srgb,#F6D77A 30%,var(--surface))" onClick=${function () { wakeMs ? props.openSleepTime(date, 'wake') : (isToday ? pressWake() : props.openSleepTime(date, 'wake')); }}>
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="7" fill="#F6D77A"></circle><g fill="#F6D77A"><rect x="13" y="1" width="2" height="4" rx="1"></rect><rect x="13" y="23" width="2" height="4" rx="1"></rect><rect x="1" y="13" width="4" height="2" rx="1"></rect><rect x="23" y="13" width="4" height="2" rx="1"></rect></g></svg>
+          <span class="stack" style="gap:0"><span style="font-size:12px;font-weight:700">${wakeMs ? '起きた ✓' : '起きた'}</span><span class="num" style="font-size:16px;font-weight:600">${wakeMs ? hm(clockOf(wakeMs)) : (isToday ? '押して記録' : '時刻を入れる')}</span></span>
+        </button>
+        <button class="card tight" style="border:none;flex-direction:row;align-items:center;gap:10px;text-align:left;background:var(--accent);color:var(--accent-ink)" onClick=${function () { bedMs ? props.openSleepTime(date, 'bed') : (isToday ? pressBed() : props.openSleepTime(date, 'bed')); }}>
+          <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><path d="M15 4a10 10 0 1 0 9 14A8.5 8.5 0 0 1 15 4z" fill="#F3D27A"></path></svg>
+          <span class="stack" style="gap:0"><span style="font-size:12px;font-weight:700">${bedMs ? '寝た ✓' : '寝る'}</span><span class="num" style="font-size:${bedMs ? 16 : 12}px;font-weight:${bedMs ? 600 : 500}">${bedMs ? hm(clockOf(bedMs)) : (isToday ? '押した時刻を記録' : '時刻を入れる')}</span></span>
+        </button>
+      </div>
+      ${sl && html`<p class="muted" style="font-size:12px;margin:0">この日の睡眠 <span class="num" style="color:var(--fg);font-weight:600">${dur(sl.min)}</span>（前日 ${hm(clockOf(sl.bed))} に就寝）</p>`}
+      ${pending.length > 0 && html`<div class="card tight">
+        <span class="label">まだ記録していない予定</span>
+        ${pending.map(function (p) {
+          return html`<div class="row" style="gap:8px">
+            <span style=${'width:4px;align-self:stretch;border-radius:2px;background:' + colorOf(cm, p.cat)}></span>
+            <span class="stack" style="gap:0;flex-grow:1;min-width:0"><span style="font-size:13px;font-weight:700;overflow-wrap:anywhere">${p.title}</span><span class="num muted" style="font-size:11px">${hm(p.start)}–${hm(p.end)}</span></span>
+            <button class="btn small" onClick=${function () { recordAsPlanned(p); }}>予定どおり</button>
+            <button class="btn small sub" style="border:1.5px solid var(--line)" onClick=${function () { props.openActual(date, null, p); }}>時間を入れる</button>
+          </div>`;
+        })}
+      </div>`}
+      ${acts.length || wakeMs || bedMs ? html`<${Timeline} cm=${cm} columns=${[{ items: acts, kind: 'act' }]} marks=${marksAct} now=${nm} onBlock=${onBlock} />`
+        : html`<div class="card"><div class="empty">${ART.sleepy}<span>まだ実績はありません。右下の＋か「予定どおり」で記録できます。</span></div></div>`}`;
+  } else {
+    var sum = {};
+    function add(list, k) { list.forEach(function (it) { var r = rootOf(cm, it.cat); if (r.rule === 'always') return; sum[r.id] = sum[r.id] || { plan: 0, act: 0, cat: r }; sum[r.id][k] += it.end - it.start; }); }
+    // 仕事の枠は中の予定ぶんを引いて数える
+    function adjusted(list) {
+      var base = list.filter(function (x) { return x.src === 'work' || x.link === 'work'; });
+      return list.map(function (it) {
+        if (base.indexOf(it) === -1) return it;
+        var inner = list.filter(function (o) { return base.indexOf(o) === -1 && rootOf(cm, o.cat).id !== rootOf(cm, it.cat).id && o.start < it.end && it.start < o.end; });
+        var cut = inner.reduce(function (a, o) { return a + (Math.min(o.end, it.end) - Math.max(o.start, it.start)); }, 0);
+        return Object.assign({}, it, { end: it.end - cut });
+      });
+    }
+    add(adjusted(plan), 'plan'); add(adjusted(acts), 'act');
+    var rows = Object.keys(sum).map(function (k) { return sum[k]; });
+    var sl2 = sleepFor(s.days, date);
+    rows.push({ cat: { name: '睡眠', color: '#5A5FAA' }, plan: goal.min, act: sl2 ? sl2.min : 0, sleep: true, missing: !sl2 });
+    var max = Math.max.apply(null, rows.map(function (r) { return Math.max(r.plan, r.act); }).concat([60]));
+    var missing = plan.filter(function (p) { return !recorded[p.key] && !isBand(cm, p.cat) && (isPast || (isToday && p.end <= nowMin())); });
+    body = html`
+      <div class="card tight">
+        <div class="between"><span class="h2" style="font-size:14px">カテゴリ別の時間</span>
+          <span class="row" style="gap:10px;font-size:10px;color:var(--fg-2)"><span class="row" style="gap:4px"><span style="width:12px;height:6px;border-radius:3px;border:1.5px dashed var(--muted)"></span>予定</span><span class="row" style="gap:4px"><span style="width:12px;height:6px;border-radius:3px;background:var(--muted)"></span>実績</span></span></div>
+        ${rows.map(function (r) {
+          var d = r.act - r.plan;
+          return html`<div style="display:grid;grid-template-columns:44px minmax(0,1fr) 104px;align-items:center;gap:8px">
+            <span style="font-size:12px;font-weight:500">${r.cat.name}</span>
+            <span class="stack" style="gap:3px"><span style=${'height:7px;border-radius:4px;border:1.5px dashed ' + r.cat.color + ';width:' + Math.max(2, r.plan / max * 100) + '%'}></span><span style=${'height:7px;border-radius:4px;background:' + r.cat.color + ';width:' + (r.act / max * 100) + '%'}></span></span>
+            <span class="num" style="font-size:11px;text-align:right;white-space:nowrap">${r.missing ? '未記録' : dur(r.act)} ${!r.missing && html`<span style="font-weight:600" class=${d >= 0 ? 't-good' : 't-bad'}>${(d > 0 ? '+' : d < 0 ? '−' : '±') + Math.abs(Math.round(d))}分</span>`}</span>
+          </div>`;
+        })}
+        ${missing.length > 0 && html`<span style="font-size:12px" class="t-bad">記録なし：${missing.map(function (p) { return p.title; }).join('、')}</span>`}
+      </div>
+      <${Timeline} cm=${cm} compact=${true} dashed=${true} columns=${[{ items: plan, kind: 'plan', label: '予定' }, { items: acts, kind: 'act', label: '実績' }]}
+        marks=${[{ min: toMin(goal.wake), col: 0 }].concat(wakeMs ? [{ min: clockOf(wakeMs), col: 1, solid: true }] : [])} now=${nm} onBlock=${onBlock} />`;
+  }
+
+  return html`<div class="app">
+    <${DateNav} date=${date} onChange=${props.setDate} onGear=${props.onGear} />
+    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['plan', '予定'], ['actual', '実績'], ['compare', '比較']]} />
+    ${body}
+    ${props.sub !== 'compare' && html`<button class="fab" aria-label=${props.sub === 'plan' ? '予定を追加' : '実績を記録'} onClick=${function () { props.sub === 'plan' ? props.onNewEvent(date) : props.openActual(date, null, null); }}>${I.plus}</button>`}
+  </div>`;
+}
+
+/* 実績の追加・編集 */
+function ActualSheet(props) {
+  var settings = props.settings, cm = catMap(settings);
+  var a = props.actual, p = props.fromPlan;
+  var init = a ? { title: a.title, cat: a.cat, start: hm2(a.start), end: hm2(a.end) } : p ? { title: p.title, cat: p.cat, start: hm2(p.start), end: hm2(p.end) } : { title: '', cat: 'other', start: hm2(Math.max(0, nowMin() - 60)), end: hm2(nowMin()) };
+  var f = useState(init), v = f[0], set = function (k, val) { var n = Object.assign({}, v); n[k] = val; f[1](n); };
+  var del = useState(false);
+  function save() {
+    if (!v.title.trim()) return;
+    props.store.setDay(props.date, function (d) {
+      if (a) d.actuals.forEach(function (x) { if (x.id === a.id) { x.title = v.title.trim(); x.cat = v.cat; x.start = v.start; x.end = v.end; } });
+      else {
+        d.actuals.push({ id: uid(), link: p ? p.key : null, title: v.title.trim(), cat: v.cat, start: v.start, end: v.end });
+        if (p && p.src === 'task') d.tasks.forEach(function (t) { if (t.id === p.id) { t.done = true; t.doneAt = Date.now(); } });
+      }
+      return d;
+    });
+    props.toast('実績を保存しました'); props.onClose();
+  }
+  function remove() {
+    props.store.setDay(props.date, function (d) {
+      d.actuals = d.actuals.filter(function (x) { return x.id !== a.id; });
+      if (a.link && a.link.indexOf('t:') === 0) d.tasks.forEach(function (t) { if ('t:' + t.id === a.link) { t.done = false; t.doneAt = null; } });
+      return d;
+    });
+    props.toast('実績を削除しました'); props.onClose();
+  }
+  return html`<${Sheet} title="実績" onClose=${props.onClose}>
+    <h2 class="h2" style="font-size:18px">${a ? '実績を編集' : '実績を記録'}</h2>
+    ${p && html`<p class="muted" style="margin:0;font-size:12px">予定：${hm(p.start)}〜${hm(p.end)}</p>`}
+    <label class="field" for="ac-title">何をしたか<input id="ac-title" class="input" value=${v.title} onInput=${function (e) { set('title', e.target.value); }} placeholder="例：資格講座" /></label>
+    <div class="group"><div class="between"><span style="font-size:14px">実際の時間</span><span class="row" style="gap:6px">
+      <label class="sr" for="ac-start">開始</label><input id="ac-start" type="time" class="timein" value=${v.start} onChange=${function (e) { if (e.target.value) set('start', e.target.value); }} />
+      <span class="muted">〜</span>
+      <label class="sr" for="ac-end">終了</label><input id="ac-end" type="time" class="timein" value=${v.end} onChange=${function (e) { if (e.target.value) set('end', e.target.value); }} />
+    </span></div></div>
+    <div class="stack"><span class="label">カテゴリ</span><${CatChips} settings=${settings} value=${v.cat} onChange=${function (c) { set('cat', c); }} /></div>
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" style=${v.title.trim() ? '' : 'opacity:.5'} onClick=${save}>保存</button></div>
+    ${a && (del[0] ? html`<div class="btns"><button class="btn sub" onClick=${function () { del[1](false); }}>やめる</button><button class="btn danger" onClick=${remove}>本当に削除する</button></div>` : html`<button class="btn danger" onClick=${function () { del[1](true); }}>この実績を削除</button>`)}
+  </${Sheet}>`;
+}
+
+/* 起床・就寝の時刻を直す */
+function SleepTimeSheet(props) {
+  var day = getDay(props.days, props.date);
+  var isBed = props.which === 'bed';
+  var cur = isBed ? day.bed : day.wake;
+  var f = useState(cur ? hm2(clockOf(cur)) : (isBed ? '23:00' : '06:30'));
+  function save() {
+    var m = toMin(f[0]);
+    var base = parse(props.date);
+    if (isBed && m < 12 * 60) base.setDate(base.getDate() + 1);
+    base.setHours(Math.floor(m / 60), m % 60, 0, 0);
+    props.store.setDay(props.date, function (d) { if (isBed) d.bed = base.getTime(); else d.wake = base.getTime(); return d; });
+    props.toast((isBed ? '就寝' : '起床') + 'の時刻を保存しました'); props.onClose();
+  }
+  function clear() { props.store.setDay(props.date, function (d) { if (isBed) d.bed = null; else d.wake = null; return d; }); props.onClose(); }
+  return html`<${Sheet} title="時刻" onClose=${props.onClose}>
+    <h2 class="h2" style="font-size:18px">${jpDate(props.date)}の${isBed ? '就寝' : '起床'}</h2>
+    ${isBed && html`<p class="muted" style="margin:0;font-size:12px">0:00〜11:59 にすると、翌日の深夜として記録します。</p>`}
+    <div class="group"><div class="between"><label for="st-time" style="font-size:14px">${isBed ? '寝た時刻' : '起きた時刻'}</label><input id="st-time" type="time" class="timein" value=${f[0]} onChange=${function (e) { if (e.target.value) f[1](e.target.value); }} /></div></div>
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" onClick=${save}>保存</button></div>
+    ${cur && html`<button class="btn danger" onClick=${clear}>記録を消す</button>`}
+  </${Sheet}>`;
+}
+
+/* 仕事の予定（その日だけ外す） */
+function WorkSheet(props) {
+  return html`<${Sheet} title="仕事" onClose=${props.onClose}>
+    <h2 class="h2" style="font-size:18px">仕事（定例）</h2>
+    <p style="margin:0;font-size:14px">${props.settings.work.start}〜${props.settings.work.end}。時間や曜日は設定で変えられます。</p>
+    <button class="btn danger" onClick=${function () { props.store.setDay(props.date, function (d) { d.workOff = true; return d; }); props.toast(jpDate(props.date) + 'は仕事を外しました'); props.onClose(); }}>この日だけ仕事を外す</button>
+    <button class="btn sub" onClick=${props.onClose}>閉じる</button>
+  </${Sheet}>`;
+}
+
+/* ---------- ToDo ---------- */
+function Todo(props) {
+  var s = props.store.state, settings = s.settings, cm = catMap(settings);
+  var date = props.date, day = getDay(s.days, date);
+  var st = taskStats(day);
+  function toggle(t) {
+    var on = !t.done;
+    props.store.setDay(date, function (d) {
+      d.tasks.forEach(function (x) { if (x.id === t.id) { x.done = on; x.doneAt = on ? Date.now() : null; } });
+      if (on && t.start && !d.actuals.some(function (a) { return a.link === 't:' + t.id; })) d.actuals.push({ id: uid(), link: 't:' + t.id, title: t.title, cat: t.cat, start: t.start, end: t.end });
+      if (!on) d.actuals = d.actuals.filter(function (a) { return a.link !== 't:' + t.id; });
+      return d;
+    });
+  }
+  function postpone(t) {
+    var next = addDays(date, 1);
+    props.store.setDay(date, function (d) { d.tasks = d.tasks.filter(function (x) { return x.id !== t.id; }); return d; });
+    props.store.setDay(next, function (d) { d.tasks.push(Object.assign({}, t, { id: uid(), start: null, end: null, done: false, doneAt: null })); return d; });
+    props.toast('「' + t.title + '」を明日に回しました');
+  }
+  function row(t) {
+    var color = colorOf(cm, t.cat);
+    var sub = t.done ? '完了' + (t.doneAt ? ' ' + hm(clockOf(t.doneAt)) : '') : t.start ? t.start + '–' + t.end : '時間なし';
+    return html`<div class=${'item' + (t.done ? ' done' : '')} style=${'--c:' + color}>
+      <button class=${'box' + (t.done ? ' on' : '')} style="padding:0" aria-label=${t.title + (t.done ? 'を未完了に戻す' : 'を完了にする')} aria-pressed=${String(!!t.done)} onClick=${function () { toggle(t); }}>${t.done ? '✓' : ''}</button>
+      <button class="grow" style="border:none;background:none;padding:0;text-align:left" onClick=${function () { props.openTask(date, t); }}><span class="title">${t.title}</span><span class="sub">${sub}</span></button>
+      <span class="tag" style=${'--c:' + color}>${catName(cm, t.cat)}</span>
+    </div>`;
+  }
+  var chores = day.tasks.filter(function (t) { return t.kind === 'chore'; }).sort(function (a, b) { return (a.start || '99') < (b.start || '99') ? -1 : 1; });
+  var todos = day.tasks.filter(function (t) { return t.kind !== 'chore'; }).sort(function (a, b) { return (a.start || '99') < (b.start || '99') ? -1 : 1; });
+  var body;
+  if (props.sub === 'plan') {
+    body = html`
+      <div class="card" style="flex-direction:row;align-items:center;gap:14px">
+        <${Ring} done=${st.done} total=${st.total} />
+        <div class="stack" style="gap:2px;flex-grow:1"><span style="font-size:16px;font-weight:700">${st.total ? 'あと' + (st.total - st.done) + '件' : 'まだありません'}</span><span class="muted" style="font-size:12px">家事 ${st.choreDone}/${st.choreTotal}・ToDo ${st.todoDone}/${st.todoTotal}</span></div>
+        ${ART.broom}
+      </div>
+      <span class="section-title">家事</span>
+      <div class="stack">${chores.length ? chores.map(row) : html`<div class="card"><div class="empty">${ART.washer}<span>右下の＋から、家事リストを選んで追加できます。</span></div></div>`}</div>
+      <span class="section-title">ToDo</span>
+      <div class="stack">${todos.length ? todos.map(row) : html`<div class="card"><div class="empty"><span>ToDoはありません。</span></div></div>`}</div>
+      <p class="muted" style="font-size:11px;margin:0">チェックすると「実績」に完了時刻つきで記録されます。時間を決めた家事は時間割の実績にも入ります。</p>`;
+  } else {
+    var week = [];
+    for (var i = 6; i >= 0; i--) { var dd = addDays(date, -i), x = taskStats(getDay(s.days, dd)); week.push({ date: dd, pct: x.total ? Math.round(x.done / x.total * 100) : null }); }
+    var vals = week.filter(function (w) { return w.pct != null; }).map(function (w) { return w.pct; });
+    var wAvg = avg(vals);
+    var done = day.tasks.filter(function (t) { return t.done; });
+    var notDone = day.tasks.filter(function (t) { return !t.done; });
+    body = html`
+      <div class="card">
+        <div class="between">
+          <div class="stack" style="gap:2px"><span class="label">この日の達成</span>
+            <span style="font-size:14px"><span class="big" style="font-size:28px">${st.done}</span>／${st.total}件<span class="num muted" style="font-size:14px;margin-left:8px">${st.total ? Math.round(st.done / st.total * 100) : 0}%</span></span>
+            <span class="muted" style="font-size:12px">家事 ${st.choreDone}/${st.choreTotal}・ToDo ${st.todoDone}/${st.todoTotal}</span></div>
+          ${ART.trophy}
+        </div>
+        <div class="stack" style="border-top:1px solid var(--line-2);padding-top:10px;gap:6px">
+          <div class="between" style="font-size:12px"><span style="font-weight:700">この7日間の達成率</span><span class="muted">平均 <span class="num" style="font-weight:600;color:var(--fg)">${wAvg != null ? Math.round(wAvg) + '%' : '--'}</span></span></div>
+          <div style="position:relative;height:80px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));align-items:end;gap:8px;border-bottom:1px solid var(--line)">
+            ${wAvg != null && html`<div style=${'position:absolute;left:0;right:0;border-top:1.5px solid var(--fg);bottom:' + (wAvg * 0.8) + 'px'}></div>`}
+            ${week.map(function (w, j) { return html`<div style="display:flex;justify-content:center;align-items:flex-end;height:80px"><div style=${'width:100%;max-width:26px;border-radius:5px 5px 0 0;height:' + ((w.pct || 0) * 0.8) + 'px;background:' + (j === 6 ? 'var(--accent)' : '#ACAFD4')}></div></div>`; })}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;text-align:center">
+            ${week.map(function (w) { return html`<span class="stack" style="gap:0"><span style="font-size:11px;font-weight:500">${DOW[parse(w.date).getDay()]}</span><span class="num" style="font-size:10px;color:var(--fg-2)">${w.pct != null ? w.pct + '%' : '-'}</span></span>`; })}
+          </div>
+        </div>
+      </div>
+      <span class="section-title">終わったもの</span>
+      <div class="stack">${done.length ? done.map(function (t) {
+        var a = day.actuals.find(function (x) { return x.link === 't:' + t.id; });
+        var diff = a && t.start ? (toMin(a.end) - toMin(a.start)) - (toMin(t.end) - toMin(t.start)) : null;
+        return html`<div class="item" style=${'--c:' + colorOf(cm, t.cat)}>
+          <span class="box on">✓</span>
+          <span class="grow"><span class="title">${t.title}</span><span class="sub">${a && t.start ? '予定 ' + t.start + '–' + t.end + ' → 実際 ' + a.start + '–' + a.end : (t.doneAt ? hm(clockOf(t.doneAt)) + ' に完了' : '完了')}</span></span>
+          ${diff != null && diff !== 0 && html`<span style="font-size:11px;font-weight:600" class=${diff > 0 ? 't-bad' : 't-good'}>${diff > 0 ? '+' : '−'}${Math.abs(diff)}分</span>`}
+        </div>`;
+      }) : html`<div class="card"><div class="empty"><span>まだ終わったものはありません。</span></div></div>`}</div>
+      ${notDone.length > 0 && html`<span class="section-title">まだのもの</span>
+      <div class="stack">${notDone.map(function (t) {
+        return html`<div class="item" style="padding:8px 12px"><span style=${'width:8px;height:8px;border-radius:4px;background:' + colorOf(cm, t.cat)}></span>
+          <span class="grow"><span style="font-size:13px">${t.title}</span></span>
+          <button class="btn small sub" style="border:1.5px solid var(--line)" onClick=${function () { postpone(t); }}>明日に回す</button></div>`;
+      })}</div>`}`;
+  }
+  return html`<div class="app">
+    <${DateNav} date=${date} onChange=${props.setDate} onGear=${props.onGear} />
+    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['plan', '予定'], ['done', '実績']]} />
+    ${body}
+    ${props.sub === 'plan' && html`<button class="fab" aria-label="家事・ToDoを追加" onClick=${function () { props.openTask(date, null); }}>${I.plus}</button>`}
+  </div>`;
+}
+
+/* 家事・ToDoの追加 */
+function TaskSheet(props) {
+  var settings = props.settings, cm = catMap(settings);
+  var day = getDay(props.days, props.date);
+  var editing = props.task;
+  var kindS = useState(editing ? (editing.kind === 'chore' ? 'chore' : 'todo') : 'chore');
+  var kind = kindS[0];
+  var picked = useState([]);
+  var draft = useState(''), draftMin = useState(30), saveToList = useState(true);
+  var timed = useState(editing ? !!editing.start : false);
+  var start = useState(editing && editing.start ? editing.start : '19:00');
+  var todo = useState(editing ? { title: editing.title, cat: editing.cat, end: editing.end || '20:00' } : { title: '', cat: 'other', end: '20:00' });
+  var del = useState(false);
+
+  // 家事：選んだ順に10分あけて並べる
+  var plan = [];
+  if (kind === 'chore' && !editing) {
+    var cursor = toMin(start[0]);
+    picked[0].forEach(function (p, i) {
+      var s0 = cursor + (i > 0 ? 10 : 0); var e0 = s0 + p.min; cursor = e0;
+      plan.push({ name: p.name, min: p.min, start: s0, end: e0, i: i });
+    });
+  }
+  var others = planItems(settings, day).filter(function (o) { return !(editing && o.key === 't:' + editing.id); });
+  var conflicts = [];
+  if (timed[0]) {
+    if (kind === 'chore' && !editing) plan.forEach(function (p) { conflicts = conflicts.concat(findConflicts(cm, { key: 'n' + p.i, cat: 'house', start: p.start, end: p.end }, others)); });
+    else { var ss = toMin(start[0]), ee = kind === 'chore' && editing ? ss + (editing.min || 30) : toMin(todo[0].end); if (ee <= ss) ee += 1440; conflicts = findConflicts(cm, { key: 'x', cat: editing && editing.kind === 'chore' ? 'house' : todo[0].cat, start: ss, end: ee }, others); }
+  }
+  var uniq = []; conflicts.forEach(function (c) { if (uniq.indexOf(c) === -1) uniq.push(c); }); conflicts = uniq;
+
+  function togglePick(c) {
+    var has = picked[0].some(function (p) { return p.name === c.name; });
+    picked[1](has ? picked[0].filter(function (p) { return p.name !== c.name; }) : picked[0].concat([{ name: c.name, min: c.min }]));
+  }
+  function addCustom() {
+    var t = draft[0].trim(); if (!t) return;
+    if (!picked[0].some(function (p) { return p.name === t; })) picked[1](picked[0].concat([{ name: t, min: draftMin[0], custom: true }]));
+    if (saveToList[0] && !settings.chores.some(function (c) { return c.name === t; })) props.store.setSettings(function (st) { st.chores.push({ name: t, min: draftMin[0] }); return st; });
+    draft[1]('');
+  }
+  function adjust(i, d) { var n = picked[0].slice(); n[i] = Object.assign({}, n[i], { min: Math.max(5, n[i].min + d) }); picked[1](n); }
+  function save() {
+    if (editing) {
+      props.store.setDay(props.date, function (d) {
+        d.tasks.forEach(function (t) {
+          if (t.id !== editing.id) return;
+          if (t.kind !== 'chore') { t.title = todo[0].title.trim() || t.title; t.cat = todo[0].cat; }
+          if (timed[0]) { t.start = start[0]; t.end = t.kind === 'chore' ? hm2(toMin(start[0]) + (t.min || 30)) : todo[0].end; } else { t.start = null; t.end = null; }
+        });
+        return d;
+      });
+      props.toast('保存しました'); props.onClose(); return;
+    }
+    if (kind === 'chore') {
+      if (!picked[0].length) return;
+      props.store.setDay(props.date, function (d) {
+        plan.forEach(function (p) { d.tasks.push({ id: uid(), kind: 'chore', title: p.name, cat: 'house', min: p.min, start: timed[0] ? hm2(p.start) : null, end: timed[0] ? hm2(p.end) : null, done: false, doneAt: null }); });
+        return d;
+      });
+      props.toast(plan.length + '件の家事を追加しました');
+    } else {
+      if (!todo[0].title.trim()) return;
+      props.store.setDay(props.date, function (d) { d.tasks.push({ id: uid(), kind: 'todo', title: todo[0].title.trim(), cat: todo[0].cat, start: timed[0] ? start[0] : null, end: timed[0] ? todo[0].end : null, done: false, doneAt: null }); return d; });
+      props.toast('ToDoを追加しました');
+    }
+    props.onClose();
+  }
+  function remove() {
+    props.store.setDay(props.date, function (d) { d.tasks = d.tasks.filter(function (t) { return t.id !== editing.id; }); d.actuals = d.actuals.filter(function (a) { return a.link !== 't:' + editing.id; }); return d; });
+    props.toast('削除しました'); props.onClose();
+  }
+  var canSave = editing ? true : kind === 'chore' ? picked[0].length > 0 : !!todo[0].title.trim();
+
+  return html`<${Sheet} title="追加" onClose=${props.onClose}>
+    <div class="between"><div class="row" style="gap:10px">${ART.washer}<h2 class="h2" style="font-size:18px">${editing ? '編集する' : '追加する'}</h2></div><span class="muted" style="font-size:13px">${jpDate(props.date)}</span></div>
+    ${!editing && html`<${Seg} label="種類" value=${kind} onChange=${kindS[1]} options=${[['chore', '家事'], ['todo', 'ToDo']]} />`}
+    ${editing && editing.kind === 'chore' && html`<p style="margin:0;font-size:16px;font-weight:700">${editing.title}<span class="num muted" style="font-size:12px;margin-left:8px">${editing.min || 30}分</span></p>`}
+
+    ${!editing && kind === 'chore' && html`
+      <div class="stack"><span class="label">家事リストから選ぶ（複数選べます・数字はかかる時間）</span>
+        <div class="chips">${settings.chores.map(function (c) {
+          var on = picked[0].some(function (p) { return p.name === c.name; });
+          return html`<button class="chip" style="--c:#B08A6A" aria-pressed=${String(on)} onClick=${function () { togglePick(c); }}>${on && html`<span style="color:#8B5E3C;font-weight:700">✓</span>`}${c.name}<span class="min">${c.min}分</span></button>`;
+        })}${picked[0].filter(function (p) { return p.custom; }).map(function (p) { return html`<button class="chip" style="--c:#B08A6A" aria-pressed="true" onClick=${function () { togglePick(p); }}>✓ ${p.name}<span class="min">${p.min}分</span></button>`; })}</div>
+      </div>
+      <div class="stack"><label class="label" for="cus">リストにないときは入力</label>
+        <div class="row"><input id="cus" class="input" style="flex-grow:1" value=${draft[0]} onInput=${function (e) { draft[1](e.target.value); }} placeholder="例：換気扇の掃除" />
+          <label class="sr" for="cus-min">かかる時間</label>
+          <select id="cus-min" class="input" style="width:auto;flex:none" value=${String(draftMin[0])} onChange=${function (e) { draftMin[1](+e.target.value); }}>${[10, 15, 20, 30, 45, 60, 90, 120].map(function (n) { return html`<option value=${String(n)}>${n}分</option>`; })}</select>
+          <button class="btn small" style="background:#B08A6A;color:#fff;padding:10px 14px;border-radius:10px;white-space:nowrap;flex:none" onClick=${addCustom}>追加</button></div>
+        <label class="row" style="font-size:13px;color:var(--fg-2)"><input type="checkbox" checked=${saveToList[0]} onChange=${function (e) { saveToList[1](e.target.checked); }} style="width:18px;height:18px;accent-color:var(--accent)" />入力した家事を、かかる時間ごと家事リストに保存する</label>
+      </div>`}
+
+    ${(kind === 'todo' && !editing) || (editing && editing.kind !== 'chore') ? html`
+      <label class="field" for="td-title">やること<input id="td-title" class="input" value=${todo[0].title} onInput=${function (e) { todo[1](Object.assign({}, todo[0], { title: e.target.value })); }} placeholder="例：市役所に書類を出す" /></label>
+      <div class="stack"><span class="label">カテゴリ</span><${CatChips} settings=${settings} value=${todo[0].cat} onChange=${function (c) { todo[1](Object.assign({}, todo[0], { cat: c })); }} /></div>` : null}
+
+    <div class="stack" style="border-top:1px solid var(--line-2);padding-top:12px;gap:10px">
+      <div class="between"><span style="font-size:14px;font-weight:500">時間を決める</span><${Switch} label="時間を決める" on=${timed[0]} onChange=${timed[1]} /></div>
+      ${timed[0] && html`<div class="row" style="flex-wrap:wrap;gap:10px">
+        <label for="tk-start" style="font-size:13px;color:var(--fg-2)">開始</label>
+        <input id="tk-start" type="time" class="timein" value=${start[0]} onChange=${function (e) { if (e.target.value) start[1](e.target.value); }} />
+        ${kind === 'todo' && !editing || (editing && editing.kind !== 'chore') ? html`<label for="tk-end" style="font-size:13px;color:var(--fg-2)">終了</label><input id="tk-end" type="time" class="timein" value=${todo[0].end} onChange=${function (e) { if (e.target.value) todo[1](Object.assign({}, todo[0], { end: e.target.value })); }} />`
+        : html`<span style="font-size:13px;color:var(--fg-2)">→ 終了</span><span class="num" style="font-size:16px;font-weight:600;padding:6px 10px;border-radius:8px;background:var(--accent-soft);color:var(--accent)">${editing ? hm(toMin(start[0]) + (editing.min || 30)) : plan.length ? hm(plan[plan.length - 1].end) : '--:--'}</span><span class="muted" style="font-size:11px">自動</span>`}
+      </div>`}
+      ${timed[0] && kind === 'chore' && !editing && html`<div class="group">
+        ${plan.length ? plan.map(function (p) {
+          return html`<div class="row" style="gap:10px">
+            <span style="width:4px;align-self:stretch;border-radius:2px;background:#B08A6A"></span>
+            <span class="num" style="font-size:12px;color:var(--fg-2);width:92px;flex:none">${hm(p.start)}〜${hm(p.end)}</span>
+            <span style="flex-grow:1;font-size:14px;font-weight:500;min-width:0">${p.name}</span>
+            <button class="stepper" aria-label=${p.name + 'を5分短くする'} onClick=${function () { adjust(p.i, -5); }}>−</button>
+            <span class="num" style="font-size:12px;width:36px;text-align:center">${p.min}分</span>
+            <button class="stepper" aria-label=${p.name + 'を5分長くする'} onClick=${function () { adjust(p.i, 5); }}>+</button>
+          </div>`;
+        }) : html`<span class="muted" style="font-size:13px">家事を選ぶと、ここに時間の並びが出ます</span>`}
+      </div>
+      <span class="muted" style="font-size:11px">選んだ順に、10分ずつあけて続けて入ります。−／+ はこの日だけの調整です。</span>`}
+      ${timed[0] && html`<${ConflictNote} cm=${cm} list=${conflicts} />`}
+    </div>
+
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button>
+      <button class="btn" style=${canSave ? '' : 'opacity:.5'} onClick=${save}>${editing ? '保存' : kind === 'chore' ? (picked[0].length ? picked[0].length + '件を追加' : '追加') : '追加'}</button></div>
+    ${editing && (del[0] ? html`<div class="btns"><button class="btn sub" onClick=${function () { del[1](false); }}>やめる</button><button class="btn danger" onClick=${remove}>本当に削除する</button></div>` : html`<button class="btn danger" onClick=${function () { del[1](true); }}>削除</button>`)}
+  </${Sheet}>`;
+}
+
+/* ---------- 睡眠の記録 ---------- */
+function SleepLog(props) {
+  var s = props.store.state, settings = s.settings;
+  var modeS = useState('week'), mode = modeS[0];
+  var anchorS = useState(todayStr()), anchor = anchorS[0];
+  var t = todayStr();
+  function range(m, a) {
+    if (m === 'week') { var list = []; for (var i = 6; i >= 0; i--) list.push(addDays(a, -i)); return list; }
+    if (m === 'month') { var d = parse(a), y = d.getFullYear(), mo = d.getMonth(), n = new Date(y, mo + 1, 0).getDate(), r = []; for (var k = 1; k <= n; k++) r.push(ymd(new Date(y, mo, k))); return r; }
+    return null;
+  }
+  function shift(n) {
+    if (mode === 'week') anchorS[1](addDays(anchor, 7 * n));
+    else if (mode === 'month') { var d = parse(anchor); anchorS[1](ymd(new Date(d.getFullYear(), d.getMonth() + n, 1))); }
+    else { var d2 = parse(anchor); anchorS[1](ymd(new Date(d2.getFullYear() + n, 0, 1))); }
+  }
+  var bars = [], label = '', prevAvg = null, cur = [];
+  if (mode === 'year') {
+    var yr = parse(anchor).getFullYear();
+    label = yr + '年';
+    for (var mo = 0; mo < 12; mo++) {
+      var ds = range('month', ymd(new Date(yr, mo, 1))).map(function (d) { var x = sleepFor(s.days, d); return x ? x.min : null; }).filter(function (v) { return v != null; });
+      var a = avg(ds);
+      bars.push({ label: (mo + 1) + '', value: a, sub: a != null ? hm(a) : '' });
+      cur = cur.concat(ds);
+    }
+    var prevY = [];
+    for (var pm = 0; pm < 12; pm++) prevY = prevY.concat(range('month', ymd(new Date(yr - 1, pm, 1))).map(function (d) { var x = sleepFor(s.days, d); return x ? x.min : null; }).filter(function (v) { return v != null; }));
+    prevAvg = avg(prevY);
+  } else {
+    var dates = range(mode, anchor);
+    label = mode === 'week' ? jpDate(dates[0]) + ' 〜 ' + jpDate(dates[6]) : parse(anchor).getFullYear() + '年' + (parse(anchor).getMonth() + 1) + '月';
+    dates.forEach(function (d, i) {
+      var x = sleepFor(s.days, d);
+      var prevX = sleepFor(s.days, addDays(d, -1));
+      bars.push({ label: mode === 'week' ? DOW[parse(d).getDay()] : (i % 5 === 0 || i === dates.length - 1 ? String(parse(d).getDate()) : ''), value: x ? x.min : null, sub: mode === 'week' && x ? hm(x.min) : '', diff: mode === 'week' && x && prevX ? x.min - prevX.min : null, date: d, today: d === t });
+      if (x) cur.push(x.min);
+    });
+    var prevDates = mode === 'week' ? range('week', addDays(anchor, -7)) : range('month', ymd(new Date(parse(anchor).getFullYear(), parse(anchor).getMonth() - 1, 1)));
+    prevAvg = avg(prevDates.map(function (d) { var x = sleepFor(s.days, d); return x ? x.min : null; }).filter(function (v) { return v != null; }));
+  }
+  var curAvg = avg(cur);
+  var goalW = goalFor(settings, '2026-11-17').min, goalH = goalFor(settings, '2026-11-15').min;
+  var goalAvg = mode === 'year' ? (goalW * 5 + goalH * 2) / 7 : avg((range(mode, anchor) || []).map(function (d) { return goalFor(settings, d).min; })) || goalW;
+  var last = sleepFor(s.days, t), lastPrev = sleepFor(s.days, addDays(t, -1));
+  var beds = [], wakes = [], longest = null, shortest = null;
+  (mode === 'year' ? [] : range(mode, anchor)).forEach(function (d) {
+    var x = sleepFor(s.days, d); if (!x) return;
+    var b = clockOf(x.bed); if (b < 12 * 60) b += 1440; beds.push(b); wakes.push(clockOf(x.wake));
+    if (!longest || x.min > longest.min) longest = { min: x.min, date: d };
+    if (!shortest || x.min < shortest.min) shortest = { min: x.min, date: d };
+  });
+  var maxV = Math.max(9 * 60, Math.max.apply(null, bars.map(function (b) { return b.value || 0; }).concat([goalAvg])) + 30);
+  var H = 170;
+  var yv = function (v) { return H - v / maxV * H; };
+  var goalS = useState(false);
+
+  return html`<div class="app">
+    <div class="top"><div class="row" style="gap:4px;margin-left:-10px"><button class="iconbtn plain" aria-label="戻る" onClick=${props.onBack}>${I.back}</button><h1 style="margin:0;font-size:20px">睡眠の記録</h1></div></div>
+    <${Seg} label="期間" value=${mode} onChange=${function (m) { modeS[1](m); anchorS[1](todayStr()); }} options=${[['week', '週'], ['month', '月'], ['year', '年']]} />
+    <div class="between"><button class="iconbtn plain" aria-label="前へ" onClick=${function () { shift(-1); }}>‹</button><span style="font-size:14px;font-weight:500;text-align:center">${label}</span><button class="iconbtn plain" aria-label="次へ" onClick=${function () { shift(1); }}>›</button></div>
+    <div class="card">
+      <div class="between" style="align-items:flex-start">
+        <div class="stack"><span class="label">${mode === 'week' ? 'この週' : mode === 'month' ? 'この月' : 'この年'}の平均睡眠</span>
+          <span class="big" style="font-size:34px">${curAvg != null ? html`${Math.floor(curAvg / 60)}<small style="font-size:18px">h</small>${pad(Math.round(curAvg) % 60)}<small style="font-size:18px">m</small>` : '--'}</span></div>
+        ${ART.sleepy}
+      </div>
+      <div class="chips" style="gap:6px">
+        ${curAvg != null && prevAvg != null && html`<span class=${curAvg >= prevAvg ? 'chip-good' : 'chip-bad'}>${mode === 'week' ? '前週' : mode === 'month' ? '前月' : '前年'}の平均より ${signed(curAvg - prevAvg)}</span>`}
+        ${curAvg != null && html`<span class=${curAvg >= goalAvg ? 'chip-good' : 'chip-bad'}>目標より ${signed(curAvg - goalAvg)}</span>`}
+        ${curAvg == null && html`<span class="muted" style="font-size:12px">この期間の記録はまだありません。時間割の実績で「寝る」「起きた」を押すと記録されます。</span>`}
+      </div>
+      <div class="between" style="border-top:1px solid var(--line-2);padding-top:10px;flex-wrap:wrap">
+        <span style="font-size:13px">昨夜 <span class="num" style="font-weight:600">${last ? dur(last.min) : '--'}</span>${last && lastPrev && html`<span class=${last.min >= lastPrev.min ? 't-good' : 't-bad'} style="font-weight:500;margin-left:8px">前日より ${signed(last.min - lastPrev.min)}</span>`}</span>
+        <button class="btn small ghost" onClick=${function () { goalS[1](true); }}>目標を変更</button>
+      </div>
+    </div>
+    <div class="card" style="padding:16px 12px 12px">
+      <div class="row" style="gap:14px;font-size:11px;color:var(--fg-2);padding-left:4px">
+        <span class="row" style="gap:4px"><span style="width:14px;border-top:2px dashed var(--now)"></span>目標</span>
+        <span class="row" style="gap:4px"><span style="width:14px;border-top:2px solid var(--fg)"></span>平均</span>
+      </div>
+      <div class="row" style="gap:6px;align-items:flex-start">
+        <div style=${'position:relative;width:26px;flex:none;height:' + H + 'px'} class="num">
+          ${[0, 3, 6, 9].filter(function (h) { return h * 60 <= maxV; }).map(function (h) { return html`<span style=${'position:absolute;right:0;font-size:10px;color:var(--muted);top:' + (yv(h * 60) - 7) + 'px'}>${h}h</span>`; })}
+        </div>
+        <div style=${'position:relative;flex-grow:1;min-width:0;height:' + H + 'px;border-bottom:1px solid var(--line)'}>
+          ${[3, 6, 9].filter(function (h) { return h * 60 <= maxV; }).map(function (h) { return html`<div style=${'position:absolute;left:0;right:0;border-top:1px solid var(--line-2);top:' + yv(h * 60) + 'px'}></div>`; })}
+          <div style=${'position:absolute;inset:0;display:grid;align-items:end;gap:' + (bars.length > 12 ? 2 : 6) + 'px;grid-template-columns:repeat(' + bars.length + ',minmax(0,1fr))'}>
+            ${bars.map(function (b, i) { return html`<div style="display:flex;justify-content:center;align-items:flex-end;height:100%"><div title=${b.value != null ? dur(b.value) : '記録なし'} style=${'width:100%;max-width:22px;border-radius:5px 5px 0 0;height:' + (b.value ? b.value / maxV * H : 0) + 'px;background:' + (b.today || (mode === 'year' && i === new Date().getMonth()) ? 'var(--accent)' : '#ACAFD4')}></div></div>`; })}
+          </div>
+          <div style=${'position:absolute;left:0;right:0;border-top:2px dashed var(--now);top:' + yv(goalAvg) + 'px'}></div>
+          ${curAvg != null && html`<div style=${'position:absolute;left:0;right:0;border-top:2px solid var(--fg);top:' + yv(curAvg) + 'px'}></div>`}
+        </div>
+      </div>
+      <div class="row" style="gap:6px">
+        <div style="width:26px;flex:none"></div>
+        <div style=${'flex-grow:1;min-width:0;display:grid;text-align:center;gap:' + (bars.length > 12 ? 2 : 6) + 'px;grid-template-columns:repeat(' + bars.length + ',minmax(0,1fr))'}>
+          ${bars.map(function (b) { return html`<span class="stack" style="gap:1px;min-width:0"><span style="font-size:11px;font-weight:500;white-space:nowrap">${b.label}</span>${mode === 'week' && html`<span class="num" style="font-size:10px;color:var(--fg-2)">${b.sub || '-'}</span><span class=${'num ' + (b.diff == null ? '' : b.diff >= 0 ? 't-good' : 't-bad')} style="font-size:10px;font-weight:600">${b.diff == null ? '' : (b.diff > 0 ? '+' : b.diff < 0 ? '−' : '±') + Math.abs(b.diff)}</span>`}</span>`; })}
+        </div>
+      </div>
+      ${mode === 'week' && html`<span class="muted" style="font-size:11px;padding-left:4px">下の段の数字は前日との差（分）</span>`}
+      ${mode === 'year' && html`<span class="muted" style="font-size:11px;padding-left:4px">月ごとの平均です</span>`}
+    </div>
+    ${mode !== 'year' && html`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+      <div class="card tight" style="gap:2px"><span class="label" style="font-size:11px">平均の就寝</span><span class="num" style="font-size:18px;font-weight:600">${beds.length ? hm(avg(beds)) : '--'}</span></div>
+      <div class="card tight" style="gap:2px"><span class="label" style="font-size:11px">平均の起床</span><span class="num" style="font-size:18px;font-weight:600">${wakes.length ? hm(avg(wakes)) : '--'}</span></div>
+      <div class="card tight" style="gap:2px"><span class="label" style="font-size:11px">いちばん長い日</span><span style="font-size:13px"><span class="num" style="font-size:18px;font-weight:600">${longest ? dur(longest.min) : '--'}</span>${longest && '　' + jpDate(longest.date, false)}</span></div>
+      <div class="card tight" style="gap:2px"><span class="label" style="font-size:11px">いちばん短い日</span><span style="font-size:13px"><span class="num" style="font-size:18px;font-weight:600">${shortest ? dur(shortest.min) : '--'}</span>${shortest && '　' + jpDate(shortest.date, false)}</span></div>
+    </div>`}
+    ${goalS[0] && html`<${GoalSheet} settings=${settings} store=${props.store} toast=${props.toast} onClose=${function () { goalS[1](false); }} />`}
+  </div>`;
+}
+function GoalSheet(props) {
+  var g = props.settings.goal;
+  var tab = useState('weekday');
+  var vals = useState({ weekday: Object.assign({}, g.weekday), holiday: Object.assign({}, g.holiday) });
+  var v = vals[0][tab[0]];
+  function set(k, val) { var n = JSON.parse(JSON.stringify(vals[0])); n[tab[0]][k] = val; vals[1](n); }
+  var m = toMin(v.wake) - toMin(v.bed); if (m <= 0) m += 1440;
+  return html`<${Sheet} title="睡眠の目標" onClose=${props.onClose}>
+    <div class="row" style="gap:14px">${ART.sunmoon}<div class="stack" style="gap:2px"><h2 class="h2" style="font-size:18px">睡眠の目標</h2><span class="muted" style="font-size:12px">時間割の予定にも反映されます</span></div></div>
+    <${Seg} label="曜日" value=${tab[0]} onChange=${tab[1]} options=${[['weekday', '平日（月〜金）'], ['holiday', '休日（土日・祝）']]} />
+    <div class="group">
+      <div class="between"><label for="g-bed" style="font-size:14px">目標の就寝</label><input id="g-bed" type="time" class="timein" value=${v.bed} onChange=${function (e) { if (e.target.value) set('bed', e.target.value); }} /></div>
+      <div class="between"><label for="g-wake" style="font-size:14px">目標の起床</label><input id="g-wake" type="time" class="timein" value=${v.wake} onChange=${function (e) { if (e.target.value) set('wake', e.target.value); }} /></div>
+    </div>
+    <div class="between" style="padding:0 4px"><span style="font-size:13px;color:var(--fg-2)">目標の睡眠時間</span><span class="big" style="font-size:24px">${dur(m)}</span></div>
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" onClick=${function () { var n = vals[0]; props.store.setSettings(function (st) { st.goal = n; return st; }); props.toast('睡眠の目標を保存しました'); props.onClose(); }}>保存</button></div>
+  </${Sheet}>`;
+}
+
+/* ---------- 設定 ---------- */
+function Settings(props) {
+  var store = props.store, s = store.state, settings = s.settings;
+  var editCat = useState(null);
+  var goalS = useState(false);
+  var newChore = useState(''), newChoreMin = useState(30);
+  var importS = useState(null);
+  var fileRef = useRef(null);
+  function upd(fn) { store.setSettings(fn); }
+  var tops = settings.cats.filter(function (c) { return !c.parent; });
+  function ruleText(c) {
+    if (c.rule === 'always') return ['常にOK', 'good'];
+    if (c.rule === 'any') return ['どれとでもOK', 'good'];
+    if (c.rule === 'none') return ['重なりNG', 'bad'];
+    var names = (c.allow || []).map(function (id) { var x = settings.cats.find(function (k) { return k.id === id; }); return x ? x.name : null; }).filter(Boolean);
+    return [(names.length ? names.join('・') : 'なし') + 'とだけOK', 'part'];
+  }
+  function exportData() {
+    var data = JSON.stringify({ app: 'schedule-book', version: 1, exportedAt: new Date().toISOString(), settings: settings, days: s.days }, null, 2);
+    try {
+      var blob = new Blob([data], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'schedule-book-' + todayStr() + '.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      props.toast('書き出しました');
+    } catch (e) { props.toast('書き出せませんでした'); }
+  }
+  function onFile(e) {
+    var f = e.target.files && e.target.files[0]; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () { try { var d = JSON.parse(r.result); if (!d || d.app !== 'schedule-book') throw new Error(); importS[1](d); } catch (x) { props.toast('このファイルは読み込めません'); } };
+    r.readAsText(f); e.target.value = '';
+  }
+  return html`<div class="app">
+    <div class="top"><div class="row" style="gap:4px;margin-left:-10px"><button class="iconbtn plain" aria-label="戻る" onClick=${props.onBack}>${I.back}</button><h1 style="margin:0;font-size:20px">設定</h1></div></div>
+
+    <span class="section-title">仕事の定例予定</span>
+    <div class="card">
+      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">
+        ${[1, 2, 3, 4, 5, 6, 0].map(function (d) {
+          var on = settings.work.days.indexOf(d) !== -1;
+          return html`<button aria-pressed=${String(on)} aria-label=${DOW[d] + '曜日'} style=${'height:40px;border-radius:10px;font-weight:700;font-size:13px;border:1.5px solid ' + (on ? '#8A93A3' : 'var(--line)') + ';background:' + (on ? '#8A93A3' : 'var(--surface)') + ';color:' + (on ? '#1C2230' : 'var(--muted)')} onClick=${function () { upd(function (st) { st.work.days = on ? st.work.days.filter(function (x) { return x !== d; }) : st.work.days.concat([d]); return st; }); }}>${DOW[d]}</button>`;
+        })}
+      </div>
+      <div class="row" style="flex-wrap:wrap">
+        <label for="w-start" style="font-size:13px;color:var(--fg-2)">時間</label>
+        <input id="w-start" type="time" class="timein" value=${settings.work.start} onChange=${function (e) { var v = e.target.value; if (v) upd(function (st) { st.work.start = v; return st; }); }} />
+        <span class="muted">〜</span>
+        <label class="sr" for="w-end">終了</label>
+        <input id="w-end" type="time" class="timein" value=${settings.work.end} onChange=${function (e) { var v = e.target.value; if (v) upd(function (st) { st.work.end = v; return st; }); }} />
+      </div>
+      <div class="between"><span style="font-size:13px">祝日は仕事を入れない</span><${Switch} label="祝日は仕事を入れない" on=${settings.work.skipHoliday} onChange=${function (x) { upd(function (st) { st.work.skipHoliday = x; return st; }); }} /></div>
+      <span class="muted" style="font-size:12px;line-height:1.6">選んだ曜日の時間割に自動で入ります。休みの日は、時間割で仕事をタップすると外せます。</span>
+    </div>
+
+    <span class="section-title">睡眠の目標</span>
+    <div class="card" style="padding:0;gap:0">
+      ${[['weekday', '平日'], ['holiday', '休日']].map(function (k, i) {
+        var g = settings.goal[k[0]], m = toMin(g.wake) - toMin(g.bed); if (m <= 0) m += 1440;
+        return html`<button class="between" style=${'border:none;background:none;padding:12px 14px;text-align:left;' + (i === 0 ? 'border-bottom:1px solid var(--line-2)' : '')} onClick=${function () { goalS[1](true); }}>
+          <span style="font-size:13px;font-weight:700;width:36px">${k[1]}</span><span class="num" style="flex-grow:1;font-size:14px">${hm(toMin(g.bed))} → ${hm(toMin(g.wake))}</span>
+          <span class="num" style="font-size:14px;font-weight:600;color:var(--accent)">${dur(m)}</span><span class="muted">›</span></button>`;
+      })}
+    </div>
+
+    <span class="section-title">家事リストとかかる時間</span>
+    <div class="card" style="padding:0;gap:0">
+      ${settings.chores.map(function (c, i) {
+        return html`<div class="row" style="gap:6px;padding:8px 12px;border-bottom:1px solid var(--line-2)">
+          <span class="stack" style="gap:0">
+            <button class="stepper" style="width:26px;height:20px;border-radius:6px;font-size:10px" aria-label=${c.name + 'を上へ'} disabled=${i === 0} onClick=${function () { upd(function (st) { var a = st.chores; var x = a[i]; a[i] = a[i - 1]; a[i - 1] = x; return st; }); }}>▲</button>
+            <button class="stepper" style="width:26px;height:20px;border-radius:6px;font-size:10px" aria-label=${c.name + 'を下へ'} disabled=${i === settings.chores.length - 1} onClick=${function () { upd(function (st) { var a = st.chores; var x = a[i]; a[i] = a[i + 1]; a[i + 1] = x; return st; }); }}>▼</button>
+          </span>
+          <span style="flex-grow:1;font-size:14px;min-width:0;overflow-wrap:anywhere">${c.name}</span>
+          <button class="stepper" aria-label=${c.name + 'を5分短くする'} onClick=${function () { upd(function (st) { st.chores[i].min = Math.max(5, st.chores[i].min - 5); return st; }); }}>−</button>
+          <span class="num" style="font-size:13px;width:40px;text-align:center">${c.min}分</span>
+          <button class="stepper" aria-label=${c.name + 'を5分長くする'} onClick=${function () { upd(function (st) { st.chores[i].min += 5; return st; }); }}>+</button>
+          <button class="stepper" aria-label=${c.name + 'を削除'} style="color:var(--bad)" onClick=${function () { upd(function (st) { st.chores.splice(i, 1); return st; }); }}>×</button>
+        </div>`;
+      })}
+      <div class="row" style="padding:10px 12px">
+        <label class="sr" for="nc">家事の名前</label><input id="nc" class="input" style="flex-grow:1" value=${newChore[0]} onInput=${function (e) { newChore[1](e.target.value); }} placeholder="家事を追加" />
+        <label class="sr" for="nc-min">かかる時間</label>
+        <select id="nc-min" class="input" style="width:auto;flex:none" value=${String(newChoreMin[0])} onChange=${function (e) { newChoreMin[1](+e.target.value); }}>${[5, 10, 15, 20, 30, 45, 60, 90, 120].map(function (n) { return html`<option value=${String(n)}>${n}分</option>`; })}</select>
+        <button class="btn small" style="padding:10px 14px;border-radius:10px;white-space:nowrap;flex:none" onClick=${function () { var t = newChore[0].trim(); if (!t) return; var mm = newChoreMin[0]; upd(function (st) { st.chores.push({ name: t, min: mm }); return st; }); newChore[1](''); }}>追加</button>
+      </div>
+    </div>
+
+    <span class="section-title">カテゴリ・色・重なりのルール</span>
+    <div class="card" style="padding:0;gap:0">
+      ${tops.map(function (c) {
+        var rt = ruleText(c);
+        var subs = settings.cats.filter(function (x) { return x.parent === c.id; });
+        return html`<button class="row" style="border:none;background:none;padding:10px 14px;border-bottom:1px solid var(--line-2);text-align:left;gap:10px" onClick=${function () { editCat[1](c.id); }}>
+            <span style=${'width:16px;height:16px;border-radius:8px;flex:none;background:' + c.color}></span>
+            <span style="flex-grow:1;font-size:14px;font-weight:500">${c.name}</span>
+            <span class=${rt[1] === 'good' ? 'chip-good' : rt[1] === 'bad' ? 'chip-bad' : ''} style=${rt[1] === 'part' ? 'font-size:11px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--fg)' : 'font-size:11px;padding:2px 8px'}>${rt[0]}</span><span class="muted">›</span>
+          </button>
+          ${subs.map(function (sc) {
+            return html`<button class="row" style="border:none;background:none;padding:8px 14px 8px 38px;border-bottom:1px solid var(--line-2);text-align:left;gap:10px" onClick=${function () { editCat[1](sc.id); }}>
+              <span style=${'width:14px;height:14px;border-radius:7px;flex:none;background:' + sc.color}></span><span style="flex-grow:1;font-size:13px">${sc.name}</span><span class="muted" style="font-size:11px">${c.name}と同じ ›</span></button>`;
+          })}`;
+      })}
+      <button style="border:none;background:none;padding:12px 14px;text-align:left;font-weight:700;color:var(--accent);font-size:14px" onClick=${function () { var id = 'c' + uid(); upd(function (st) { st.cats.push({ id: id, name: '新しいカテゴリ', color: '#7EC8E8', rule: 'any', allow: [] }); return st; }); editCat[1](id); }}>＋ カテゴリを追加</button>
+    </div>
+    <p class="muted" style="font-size:11px;margin:0">ルールは、重なった2つの予定のどちらから見てもOKなら警告しません。「常にOK」のカテゴリは相手に関係なく警告しません。</p>
+
+    <span class="section-title">そのほか</span>
+    <div class="card" style="padding:0;gap:0">
+      <div class="between" style="padding:12px 14px;border-bottom:1px solid var(--line-2)"><span style="font-size:14px">保存先</span><span class="muted" style="font-size:12px;text-align:right;overflow-wrap:anywhere">${s.mode === 'db' ? 'Googleアカウント' + (s.user && s.user.email ? '（' + s.user.email + '）' : '') : 'この端末だけ'}</span></div>
+      ${s.mode === 'db' ? html`<button class="between" style="border:none;background:none;padding:12px 14px;text-align:left;border-bottom:1px solid var(--line-2)" onClick=${store.signOut}><span style="font-size:14px">ログアウト</span><span class="muted" style="font-size:12px">›</span></button>`
+        : FB_READY && html`<button class="between" style="border:none;background:none;padding:12px 14px;text-align:left;border-bottom:1px solid var(--line-2)" onClick=${store.useCloud}><span style="font-size:14px">Googleアカウントに保存する</span><span class="muted" style="font-size:12px">PCとスマホで共有 ›</span></button>`}
+      <button class="between" style="border:none;background:none;padding:12px 14px;text-align:left;border-bottom:1px solid var(--line-2)" onClick=${exportData}><span style="font-size:14px">データを書き出す</span><span class="muted" style="font-size:12px">JSONファイル ›</span></button>
+      <button class="between" style="border:none;background:none;padding:12px 14px;text-align:left" onClick=${function () { fileRef.current && fileRef.current.click(); }}><span style="font-size:14px">データを読み込む</span><span class="muted" style="font-size:12px">書き出したファイルから ›</span></button>
+      <label class="sr" for="imp">バックアップファイル</label><input id="imp" ref=${fileRef} type="file" accept="application/json,.json" class="sr" onChange=${onFile} />
+    </div>
+    <p class="muted" style="font-size:11px;margin:0">ダークモードは端末の設定に合わせて切り替わります。祝日は2025〜2027年に対応しています。</p>
+
+    ${editCat[0] && html`<${CatSheet} settings=${settings} id=${editCat[0]} store=${store} toast=${props.toast} onClose=${function () { editCat[1](null); }} />`}
+    ${goalS[0] && html`<${GoalSheet} settings=${settings} store=${store} toast=${props.toast} onClose=${function () { goalS[1](false); }} />`}
+    ${importS[0] && html`<${Sheet} title="読み込み" onClose=${function () { importS[1](null); }}>
+      <h2 class="h2" style="font-size:18px">データを読み込みますか？</h2>
+      <p style="margin:0;font-size:14px;line-height:1.6">今のデータは、ファイルの内容（${Object.keys(importS[0].days || {}).length}日分）に置き換わります。</p>
+      <div class="btns"><button class="btn sub" onClick=${function () { importS[1](null); }}>やめる</button><button class="btn danger" onClick=${function () { store.importAll(importS[0]); importS[1](null); props.toast('読み込みました'); }}>置き換える</button></div>
+    </${Sheet}>`}
+  </div>`;
+}
+function CatSheet(props) {
+  var settings = props.settings;
+  var c = settings.cats.find(function (x) { return x.id === props.id; });
+  var f = useState(c ? JSON.parse(JSON.stringify(c)) : null);
+  var del = useState(false);
+  var newSub = useState('');
+  if (!c || !f[0]) return null;
+  var v = f[0], set = function (k, val) { var n = Object.assign({}, v); n[k] = val; f[1](n); };
+  var isSub = !!v.parent;
+  var tops = settings.cats.filter(function (x) { return !x.parent; });
+  var subs = settings.cats.filter(function (x) { return x.parent === v.id; });
+  function save() {
+    props.store.setSettings(function (st) { st.cats = st.cats.map(function (x) { return x.id === v.id ? v : x; }); return st; });
+    props.toast('カテゴリを保存しました'); props.onClose();
+  }
+  function remove() {
+    props.store.setSettings(function (st) {
+      st.cats = st.cats.filter(function (x) { return x.id !== v.id && x.parent !== v.id; });
+      st.cats.forEach(function (x) { if (x.allow) x.allow = x.allow.filter(function (a) { return a !== v.id; }); });
+      return st;
+    });
+    props.toast('カテゴリを削除しました（使っていた予定は「その他」として表示されます）'); props.onClose();
+  }
+  function addSub() {
+    var name = newSub[0].trim(); if (!name) return;
+    var id = 'c' + uid();
+    props.store.setSettings(function (st) { st.cats.push({ id: id, name: name, color: v.color, parent: v.id }); return st; });
+    newSub[1]('');
+  }
+  return html`<${Sheet} title="カテゴリ" onClose=${props.onClose}>
+    <h2 class="h2" style="font-size:18px">カテゴリを編集</h2>
+    <label class="field" for="cat-name">名前<input id="cat-name" class="input" value=${v.name} onInput=${function (e) { set('name', e.target.value); }} /></label>
+    <div class="stack"><span class="label">色</span>
+      <div class="chips">${PALETTE.map(function (p) { return html`<button class="swatch" style=${'--c:' + p} aria-label=${'色 ' + p} aria-pressed=${String(v.color.toUpperCase() === p.toUpperCase())} onClick=${function () { set('color', p); }}></button>`; })}
+        <label class="row" style="font-size:12px;color:var(--muted)">ほかの色<input type="color" value=${v.color} onInput=${function (e) { set('color', e.target.value.toUpperCase()); }} style="width:36px;height:30px;border:none;background:none;padding:0" /></label></div>
+    </div>
+    ${isSub ? html`<p class="muted" style="margin:0;font-size:13px">重なりのルールは「${(settings.cats.find(function (x) { return x.id === v.parent; }) || {}).name}」と同じです。</p>` : html`
+      <fieldset style="border:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px">
+        <legend class="label" style="padding:0;margin-bottom:6px">重なりのルール</legend>
+        ${[['always', '常にOK', '相手のルールに関係なく、何と重なっても警告しない'], ['any', 'どれとでもOK', '自分からは警告しない（相手がNGなら警告）'], ['pick', '指定したカテゴリとだけOK', '選んだカテゴリ以外と重なると警告'], ['none', '重なりNG', '何と重なっても警告（「常にOK」のカテゴリは除く）']].map(function (r) {
+          return html`<label class="row" style="align-items:flex-start;font-size:13px;line-height:1.5"><input type="radio" name="rule" checked=${v.rule === r[0]} onChange=${function () { set('rule', r[0]); }} style="margin-top:3px;accent-color:var(--accent)" />
+            <span class="stack" style="gap:0"><span style="font-weight:500">${r[1]}</span><span class="muted" style="font-size:11px">${r[2]}</span></span></label>`;
+        })}
+      </fieldset>
+      ${v.rule === 'pick' && html`<div class="stack" style="background:var(--surface-2);border-radius:10px;padding:10px">
+        <span class="label">重なってOKなカテゴリ</span>
+        <div class="chips">${tops.map(function (t) {
+          var on = (v.allow || []).indexOf(t.id) !== -1;
+          return html`<button class="chip" style=${'--c:' + t.color} aria-pressed=${String(on || t.rule === 'always')} disabled=${t.rule === 'always'} onClick=${function () { set('allow', on ? v.allow.filter(function (a) { return a !== t.id; }) : (v.allow || []).concat([t.id])); }}>${(on || t.rule === 'always') && '✓ '}${t.name}${t.rule === 'always' ? '（常にOK）' : ''}</button>`;
+        })}</div>
+      </div>`}
+      <div class="stack"><span class="label">小カテゴリ</span>
+        ${subs.length ? html`<div class="chips">${subs.map(function (sc) { return html`<span class="chip" style=${'--c:' + sc.color}><span class="dot"></span>${sc.name}</span>`; })}</div>` : html`<span class="muted" style="font-size:12px">なし</span>`}
+        <div class="row"><label class="sr" for="sub-new">小カテゴリの名前</label><input id="sub-new" class="input" style="flex-grow:1" value=${newSub[0]} onInput=${function (e) { newSub[1](e.target.value); }} placeholder="小カテゴリを追加" /><button class="btn small" style="padding:10px 14px;border-radius:10px;white-space:nowrap;flex:none" onClick=${addSub}>追加</button></div>
+      </div>`}
+    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" onClick=${save}>保存</button></div>
+    ${v.id !== 'other' && (del[0] ? html`<div class="btns"><button class="btn sub" onClick=${function () { del[1](false); }}>やめる</button><button class="btn danger" onClick=${remove}>本当に削除する</button></div>` : html`<button class="btn danger" onClick=${function () { del[1](true); }}>このカテゴリを削除</button>`)}
+  </${Sheet}>`;
+}
+
+
+/* ---------- ログイン ---------- */
+function Login(props) {
+  var s = props.store.state;
+  return html`<div class="app" style="padding-bottom:40px">
+    <div class="card" style="align-items:center;text-align:center;gap:14px;padding:28px 20px;margin-top:24px">
+      ${ART.sunrise}
+      <h1 style="margin:0;font-size:24px">スケジュール帳</h1>
+      <p style="margin:0;font-size:14px;line-height:1.7;color:var(--fg-2)">月の予定、時間割、家事とToDo、睡眠の記録をまとめて管理します。</p>
+      ${s.mode === 'signin' ? html`
+        <button class="btn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px" onClick=${props.store.signIn}>
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"></path><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"></path><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"></path><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"></path></svg>
+          Googleでログイン</button>
+        <p class="muted" style="margin:0;font-size:12px;line-height:1.6">ログインすると、PCとスマホで同じ予定が見られます。データはあなたのアカウントだけが読み書きできます。</p>`
+      : html`<div class="banner" style="text-align:left;line-height:1.6">Firebaseの設定がまだ入っていません。<br />firebase-config.js に設定値を入れると、Googleでログインできるようになります。</div>`}
+      ${s.error && html`<div class="banner" role="alert" style="text-align:left">${s.error}</div>`}
+      <button style="border:none;background:none;color:var(--accent);font-weight:700;font-size:13px;padding:8px" onClick=${props.store.useLocalOnly}>ログインせずに、この端末だけで使う</button>
+    </div>
+  </div>`;
+}
+
+/* ---------- アプリ全体 ---------- */
+function readPref() { try { return JSON.parse(localStorage.getItem('schedule-book-ui') || '{}'); } catch (e) { return {}; } }
+function writePref(v) { try { localStorage.setItem('schedule-book-ui', JSON.stringify(v)); } catch (e) { /* なし */ } }
+
+function App() {
+  var store = useStore();
+  var pref = readPref();
+  var tabS = useState(pref.tab || 'home'), tab = tabS[0];
+  var viewS = useState(null), view = viewS[0]; // 'settings' | 'sleep'
+  var dateS = useState(todayStr());
+  var monthSel = useState(todayStr());
+  var subs = useState({ monthly: pref.monthly || 'plan', time: pref.time || 'plan', todo: pref.todo || 'plan' });
+  var sheet = useState(null);
+  var toastS = useState(null);
+  var toastTimer = useRef(null);
+  function toast(msg) { toastS[1](msg); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(function () { toastS[1](null); }, 2400); }
+  useEffect(function () { writePref({ tab: tab, monthly: subs[0].monthly, time: subs[0].time, todo: subs[0].todo }); }, [tab, subs[0]]);
+  useEffect(function () { window.scrollTo(0, 0); }, [tab, view]);
+  function setSub(k, v) { var n = Object.assign({}, subs[0]); n[k] = v; subs[1](n); }
+  function go(t) { viewS[1](null); tabS[1](t); }
+
+  var s = store.state;
+  var banner = s.mode === 'local' && html`<div class="banner">この端末だけに保存しています。PCとスマホで共有するには、設定から「Googleアカウントに保存する」を選んでください。</div>`;
+  var errBanner = s.error && s.mode === 'db' && html`<div class="banner" role="alert">${s.error} <button class="btn small sub" onClick=${store.clearError}>閉じる</button></div>`;
+
+  var common = {
+    store: store, toast: toast,
+    onGear: function () { viewS[1]('settings'); },
+    onSleep: function () { viewS[1]('sleep'); },
+    onEditEvent: function (date, ev) { sheet[1]({ type: 'event', date: date, event: ev }); },
+    onNewEvent: function (date) { sheet[1]({ type: 'event', date: date, event: null }); },
+    openTask: function (date, t) { sheet[1]({ type: 'task', date: date, task: t }); },
+    openActual: function (date, a, p) { sheet[1]({ type: 'actual', date: date, actual: a && a.src === 'actual' ? a : null, fromPlan: p || null }); },
+    openSleepTime: function (date, which) { sheet[1]({ type: 'sleeptime', date: date, which: which }); },
+    openWork: function (date) { sheet[1]({ type: 'work', date: date }); }
+  };
+
+  var page;
+  if (s.mode === 'loading') page = html`<div class="app"><div class="card"><div class="empty">${ART.calendar}<span>データを読み込んでいます…</span></div></div></div>`;
+  else if (s.mode === 'signin' || s.mode === 'unconfigured') page = html`<${Login} store=${store} />`;
+  else if (view === 'settings') page = html`<${Settings} ...${common} onBack=${function () { viewS[1](null); }} />`;
+  else if (view === 'sleep') page = html`<${SleepLog} ...${common} onBack=${function () { viewS[1](null); }} />`;
+  else if (tab === 'home') page = html`<${Home} ...${common} banner=${banner || errBanner} onTodo=${function () { dateS[1](todayStr()); go('todo'); }} />`;
+  else if (tab === 'monthly') page = html`<${Monthly} ...${common} sub=${subs[0].monthly} setSub=${function (v) { setSub('monthly', v); }} selDate=${monthSel[0]} setSelDate=${monthSel[1]} onTimetable=${function (d) { dateS[1](d); setSub('time', 'plan'); go('time'); }} />`;
+  else if (tab === 'time') page = html`<${Timetable} ...${common} sub=${subs[0].time} setSub=${function (v) { setSub('time', v); }} date=${dateS[0]} setDate=${dateS[1]} />`;
+  else page = html`<${Todo} ...${common} sub=${subs[0].todo} setSub=${function (v) { setSub('todo', v); }} date=${dateS[0]} setDate=${dateS[1]} />`;
+
+  var sh = sheet[0], close = function () { sheet[1](null); };
+  var sheetEl = null;
+  if (sh && s.mode !== 'loading') {
+    if (sh.type === 'event') sheetEl = html`<${EventSheet} key=${'ev' + (sh.event ? sh.event.id : 'new') + sh.date} settings=${s.settings} days=${s.days} date=${sh.date} event=${sh.event} store=${store} toast=${toast} onClose=${close} />`;
+    else if (sh.type === 'task') sheetEl = html`<${TaskSheet} key=${'tk' + (sh.task ? sh.task.id : 'new')} settings=${s.settings} days=${s.days} date=${sh.date} task=${sh.task} store=${store} toast=${toast} onClose=${close} />`;
+    else if (sh.type === 'actual') sheetEl = html`<${ActualSheet} settings=${s.settings} date=${sh.date} actual=${sh.actual} fromPlan=${sh.fromPlan} store=${store} toast=${toast} onClose=${close} />`;
+    else if (sh.type === 'sleeptime') sheetEl = html`<${SleepTimeSheet} days=${s.days} date=${sh.date} which=${sh.which} store=${store} toast=${toast} onClose=${close} />`;
+    else if (sh.type === 'work') sheetEl = html`<${WorkSheet} settings=${s.settings} date=${sh.date} store=${store} toast=${toast} onClose=${close} />`;
+  }
+
+  var tabs = [['home', 'ホーム', I.home], ['monthly', 'マンスリー', I.cal], ['time', '時間割', I.clock], ['todo', 'ToDo', I.list]];
+  return html`<div>
+    ${tab !== 'home' && !view && (banner || errBanner) && html`<div style="max-width:520px;margin:0 auto;padding:12px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))">${banner || errBanner}</div>`}
+    ${page}
+    ${s.mode !== 'signin' && s.mode !== 'unconfigured' && html`<nav class="nav" aria-label="メイン"><div class="nav-inner">${tabs.map(function (t) {
+      return html`<button aria-current=${!view && tab === t[0] ? 'page' : null} onClick=${function () { if (t[0] === 'time' || t[0] === 'todo') { if (tab !== t[0]) dateS[1](todayStr()); } go(t[0]); }}>${t[2]}${t[1]}</button>`;
+    })}</div></nav>`}
+    ${sheetEl}
+    ${toastS[0] && html`<div class="toast" role="status">${toastS[0]}</div>`}
+  </div>`;
+}
+
+render(html`<${App} />`, document.getElementById('app'));
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); }); }
+</script>
+</body>
+</html>
