@@ -250,6 +250,7 @@ var DEFAULT_SETTINGS = {
   ],
   diet: { goalWeight: null },
   foods: [],
+  tags: [{ id: 'tag-koyanagi', name: '小柳', color: '#5A5FAA' }],
   cats: [
     { id: 'work', name: '仕事', color: '#8A93A3', rule: 'pick', allow: ['work'] },
     { id: 'house', name: '家事', color: '#B08A6A', rule: 'pick', allow: ['house'] },
@@ -275,7 +276,8 @@ function fillSettings(s) {
     chores: Array.isArray(s.chores) ? s.chores : d.chores,
     cats: Array.isArray(s.cats) && s.cats.length ? s.cats : d.cats,
     diet: Object.assign({ goalWeight: null }, s.diet || {}),
-    foods: Array.isArray(s.foods) ? s.foods : []
+    foods: Array.isArray(s.foods) ? s.foods : [],
+    tags: Array.isArray(s.tags) ? s.tags : d.tags
   };
 }
 
@@ -595,6 +597,18 @@ function Ring(props) {
   </svg>`;
 }
 
+function tagsOf(settings, ev) {
+  var ids = (ev && ev.tags) || [];
+  return (settings.tags || []).filter(function (t) { return ids.indexOf(t.id) !== -1; });
+}
+function TagPills(props) {
+  var list = tagsOf(props.settings, props.ev);
+  if (!list.length) return null;
+  return html`<span class="row" style="gap:4px;flex-wrap:wrap">${list.map(function (t) {
+    return html`<span style=${'font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:' + t.color + ';color:' + inkFor(t.color)}>${t.name}</span>`;
+  })}</span>`;
+}
+
 /* ---------- ホーム ---------- */
 function Home(props) {
   var s = props.store.state, settings = s.settings, cm = catMap(settings);
@@ -658,14 +672,14 @@ function Home(props) {
       ${events.length ? events.map(function (e) {
         return html`<button class="evrow" style=${'--c:' + colorOf(cm, e.cat)} onClick=${function () { props.onEditEvent(t, e); }}>
           <span class="time">${e.allDay ? '終日' : e.start}</span>
-          <span class="body"><b>${e.title}</b><span>${e.allDay ? '' : e.start + '〜' + (e.end || '') + '・'}${catName(cm, e.cat)}</span></span>
+          <span class="body"><b>${e.title}</b><span>${e.allDay ? '' : e.start + '〜' + (e.end || '') + '・'}${catName(cm, e.cat)}</span><${TagPills} settings=${settings} ev=${e} /></span>
         </button>`;
       }) : html`<div class="empty">${ART.calendar}<span>今日の予定はありません。マンスリーの＋から追加できます。</span></div>`}
     </div>
     ${next && html`<div class="stack">
       <span class="label" style="font-size:13px">次の予定</span>
       <button class="card" style=${'border:none;text-align:left;flex-direction:row;align-items:center;justify-content:space-between;background:' + colorOf(cm, next.ev.cat) + ';color:' + inkFor(colorOf(cm, next.ev.cat))} onClick=${function () { props.onEditEvent(next.date, next.ev); }}>
-        <span class="stack" style="gap:2px"><span style="font-size:12px;opacity:.85">${jpDate(next.date)}${next.ev.allDay ? '' : ' ' + next.ev.start}</span><span style="font-size:15px;font-weight:700">${next.ev.title}</span></span>
+        <span class="stack" style="gap:2px"><span style="font-size:12px;opacity:.85">${jpDate(next.date)}${next.ev.allDay ? '' : ' ' + next.ev.start}</span><span style="font-size:15px;font-weight:700">${next.ev.title}</span>${tagsOf(settings, next.ev).length > 0 && html`<span style="font-size:11px;opacity:.9">${tagsOf(settings, next.ev).map(function (t) { return '#' + t.name; }).join(' ')}</span>`}</span>
         <span class="row"><span style="font-size:13px;font-weight:500">${next.days === 1 ? '明日' : 'あと' + next.days + '日'}</span>${ART.ticket}</span>
       </button>
     </div>`}
@@ -719,6 +733,9 @@ function Monthly(props) {
   var sleeps = cells.filter(function (c) { return !c.out; }).map(function (c) { var x = sleepFor(s.days, c.date); return x ? x.min : null; }).filter(function (v) { return v != null; });
   var monthAvg = avg(sleeps);
   var noteState = useState(null); var editingNote = noteState[0], setEditingNote = noteState[1];
+  var tagFilter = useState(null);
+  function passTag(e) { return !tagFilter[0] || ((e.tags || []).indexOf(tagFilter[0]) !== -1); }
+  var allTags = settings.tags || [];
 
   return html`<div class="app">
     <div class="top">
@@ -735,6 +752,10 @@ function Monthly(props) {
       <span class="stack" style="gap:0;flex-grow:1"><span class="label" style="font-size:11px">今月の平均睡眠</span><span class="num" style="font-size:18px;font-weight:600">${monthAvg != null ? dur(monthAvg) : '--'}</span></span>
       <span style="font-size:13px;font-weight:700;color:var(--accent)">睡眠の記録 ›</span>
     </button>`}
+    ${props.sub === 'plan' && allTags.length > 0 && html`<div class="chips" role="group" aria-label="タグで絞り込む">
+      <button class="chip" aria-pressed=${String(!tagFilter[0])} onClick=${function () { tagFilter[1](null); }}>すべて</button>
+      ${allTags.map(function (t) { return html`<button class="chip" style=${'--c:' + t.color} aria-pressed=${String(tagFilter[0] === t.id)} onClick=${function () { tagFilter[1](tagFilter[0] === t.id ? null : t.id); }}><span class="dot"></span>${t.name}</button>`; })}
+    </div>`}
     <div class="cal">
       <div class="cal-head">${DOW.map(function (d) { return html`<span>${d}</span>`; })}</div>
       <div class="cal-grid">${cells.map(function (c) {
@@ -743,8 +764,8 @@ function Monthly(props) {
         var dcls = 'd' + (c.dow === 0 || isNatHoliday(c.date) ? ' sun' : c.dow === 6 ? ' sat' : '');
         var body;
         if (props.sub === 'plan') {
-          var evs = d ? d.events.slice().sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); }) : [];
-          body = html`${evs.slice(0, 2).map(function (e) { return html`<span class="ev" style=${'--c:' + colorOf(cm, e.cat)}>${e.title}</span>`; })}${evs.length > 2 && html`<span class="more">ほか${evs.length - 2}件</span>`}`;
+          var evs = d ? d.events.filter(passTag).sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); }) : [];
+          body = html`${evs.slice(0, 2).map(function (e) { var tg = tagsOf(settings, e); return html`<span class="ev" style=${'--c:' + colorOf(cm, e.cat)}>${tg.length > 0 && html`<span style=${'color:' + tg[0].color + ';margin-right:1px'}>●</span>`}${e.title}</span>`; })}${evs.length > 2 && html`<span class="more">ほか${evs.length - 2}件</span>`}`;
         } else {
           var sl = sleepFor(s.days, c.date);
           body = html`${sl && html`<span class="sl">${hm(sl.min)}</span>`}${d && d.note && html`<span class="note">${d.note.split('\n')[0]}</span>`}`;
@@ -756,10 +777,10 @@ function Monthly(props) {
     ${props.sub === 'plan' ? html`<div class="card">
       <div class="between"><span class="h2">${jpDate(sel)}${isNatHoliday(sel) ? '・祝日' : ''}</span>
         <button class="btn small ghost" onClick=${function () { props.onTimetable(sel); }}>時間割を見る</button></div>
-      ${day.events.length ? day.events.slice().sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); }).map(function (e) {
+      ${day.events.filter(passTag).length ? day.events.filter(passTag).sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); }).map(function (e) {
         return html`<button class="evrow" style=${'--c:' + colorOf(cm, e.cat)} onClick=${function () { props.onEditEvent(sel, e); }}>
           <span class="time">${e.allDay ? '終日' : e.start + '–' + (e.end || '')}</span>
-          <span class="body"><b>${e.title}</b><span>${catName(cm, e.cat)}${e.memo ? '／' + e.memo : ''}</span></span>
+          <span class="body"><b>${e.title}</b><span>${catName(cm, e.cat)}${e.memo ? '／' + e.memo : ''}</span><${TagPills} settings=${settings} ev=${e} /></span>
         </button>`;
       }) : html`<div class="empty">${ART.calendar}<span>予定はありません。右下の＋で追加できます。</span></div>`}
     </div>` : html`<div class="card" style="flex-direction:row;align-items:flex-start;gap:12px">
@@ -784,7 +805,7 @@ function Monthly(props) {
 function EventSheet(props) {
   var settings = props.settings, cm = catMap(settings);
   var init = props.event || { id: null, title: '', cat: 'other', allDay: false, start: '10:00', end: '11:00', memo: '' };
-  var f = useState({ date: props.date, title: init.title, cat: init.cat, allDay: !!init.allDay, start: init.start || '10:00', end: init.end || '11:00', memo: init.memo || '' });
+  var f = useState({ date: props.date, title: init.title, cat: init.cat, allDay: !!init.allDay, start: init.start || '10:00', end: init.end || '11:00', memo: init.memo || '', tags: (init.tags || []).slice() });
   var v = f[0], set = function (k, val) { var n = Object.assign({}, v); n[k] = val; f[1](n); };
   var del = useState(false);
   var day = getDay(props.days, v.date);
@@ -794,7 +815,7 @@ function EventSheet(props) {
   var overlapsOk = v.allDay ? [] : others.filter(function (o) { return o.start < cand.end && cand.start < o.end && canOverlap(cm, v.cat, o.cat); });
   function save() {
     if (!v.title.trim()) return;
-    var ev = { id: init.id || uid(), title: v.title.trim(), cat: v.cat, allDay: v.allDay, start: v.allDay ? null : v.start, end: v.allDay ? null : v.end, memo: v.memo };
+    var ev = { id: init.id || uid(), title: v.title.trim(), cat: v.cat, allDay: v.allDay, start: v.allDay ? null : v.start, end: v.allDay ? null : v.end, memo: v.memo, tags: v.tags };
     if (init.id && props.date !== v.date) props.store.setDay(props.date, function (d) { d.events = d.events.filter(function (e) { return e.id !== init.id; }); return d; });
     props.store.setDay(v.date, function (d) {
       var i = d.events.findIndex(function (e) { return e.id === ev.id; });
@@ -821,6 +842,11 @@ function EventSheet(props) {
       </span></div>`}
     </div>
     <div class="stack"><span class="label">カテゴリ</span><${CatChips} settings=${settings} value=${v.cat} onChange=${function (c) { set('cat', c); }} /></div>
+    ${(settings.tags || []).length > 0 && html`<div class="stack"><span class="label">タグ（カテゴリや時間に関係なく、いくつでもつけられます）</span>
+      <div class="chips">${settings.tags.map(function (t) {
+        var on = v.tags.indexOf(t.id) !== -1;
+        return html`<button class="chip" style=${'--c:' + t.color} aria-pressed=${String(on)} onClick=${function () { set('tags', on ? v.tags.filter(function (x) { return x !== t.id; }) : v.tags.concat([t.id])); }}>${on ? '✓ ' : '# '}${t.name}</button>`;
+      })}</div></div>`}
     <${ConflictNote} cm=${cm} list=${conflicts} okText=${overlapsOk.length ? overlapsOk.map(function (o) { return '「' + o.title + '」'; }).join('、') + 'と時間が重なりますが、重なってOKの組み合わせです。' : ''} />
     <label class="field" for="ev-memo">場所・メモ<input id="ev-memo" class="input" value=${v.memo} onInput=${function (e) { set('memo', e.target.value); }} placeholder="例：会場名、持ち物" /></label>
     <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" disabled=${!v.title.trim()} style=${v.title.trim() ? '' : 'opacity:.5'} onClick=${save}>${conflicts.length ? 'このまま保存' : '保存'}</button></div>
@@ -2001,6 +2027,22 @@ function Settings(props) {
       <button style="border:none;background:none;padding:12px 14px;text-align:left;font-weight:700;color:var(--accent);font-size:14px" onClick=${function () { var id = 'c' + uid(); upd(function (st) { st.cats.push({ id: id, name: '新しいカテゴリ', color: '#7EC8E8', rule: 'any', allow: [] }); return st; }); editCat[1](id); }}>＋ カテゴリを追加</button>
     </div>
     <p class="muted" style="font-size:11px;margin:0">ルールは、重なった2つの予定のどちらから見てもOKなら警告しません。「常にOK」のカテゴリは相手に関係なく警告しません。</p>
+
+    <span class="section-title">予定のタグ</span>
+    <div class="card" style="padding:0;gap:0">
+      ${(settings.tags || []).map(function (t, i) {
+        return html`<div class="row" style="gap:8px;padding:8px 14px;border-bottom:1px solid var(--line-2);flex-wrap:wrap">
+          <label class="sr" for=${'tg' + i}>タグの名前</label>
+          <input id=${'tg' + i} class="input" style="flex:1 1 120px;padding:6px 10px;font-size:14px" value=${t.name} onChange=${function (e) { var v = e.target.value.trim(); if (v) upd(function (st) { st.tags[i].name = v; return st; }); }} />
+          <span class="row" style="gap:4px">${['#5A5FAA', '#ACAFD4', '#6DB58A', '#EE9AC0', '#E8C55A', '#E07A7A', '#A48BD6', '#7EC8E8'].map(function (c) {
+            return html`<button class="swatch" style=${'--c:' + c + ';width:22px;height:22px'} aria-label=${'色 ' + c} aria-pressed=${String(t.color === c)} onClick=${function () { upd(function (st) { st.tags[i].color = c; return st; }); }}></button>`;
+          })}</span>
+          <button class="stepper" aria-label=${t.name + 'を削除'} style="color:var(--bad)" onClick=${function () { upd(function (st) { st.tags.splice(i, 1); return st; }); }}>×</button>
+        </div>`;
+      })}
+      <button style="border:none;background:none;padding:12px 14px;text-align:left;font-weight:700;color:var(--accent);font-size:14px" onClick=${function () { upd(function (st) { st.tags = (st.tags || []).concat([{ id: 'tag-' + uid(), name: '新しいタグ', color: '#ACAFD4' }]); return st; }); }}>＋ タグを追加</button>
+    </div>
+    <p class="muted" style="font-size:11px;margin:0">タグは重なりのルールとは関係ありません。予定に印をつけて、マンスリーで絞り込むためのものです。</p>
 
     <span class="section-title">ダイエット</span>
     <div class="card" style="padding:0;gap:0">
