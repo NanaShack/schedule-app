@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2E6B57">
+<meta name="theme-color" content="#2F5FB3">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="置き換えごはん帳">
 <link rel="manifest" href="manifest.webmanifest">
@@ -19,25 +19,25 @@ html,body{margin:0}
 [hidden]{display:none!important}
 /* Layout: スマホ1カラム。上に日付、今日のまとめ→体重→朝・昼・夕・間食のカード。下に固定タブ（今日／推移／設定） */
 :root{
-  --bg:#F3F5F2; --surface:#FFFFFF; --sunken:#E9EDE8; --fg:#1D2620; --fg-2:#3B4740; --muted:#5D6B63; --line:#DCE2DC;
-  --accent:#2E6B57; --accent-ink:#FFFFFF; --accent-soft:#E1EEE8;
-  --rep:#B85A22; --rep-soft:#FBEADF; --rep-ink:#FFFFFF;
-  --asa:#C08A12; --hiru:#3E8A6A; --yu:#B85A22; --kan:#7C64B0;
+  --bg:#F3F5FA; --surface:#FFFFFF; --sunken:#E8ECF5; --fg:#1B2233; --fg-2:#3A4459; --muted:#5C667D; --line:#DCE1EC;
+  --accent:#2F5FB3; --accent-ink:#FFFFFF; --accent-soft:#E2EAF8;
+  --rep:#CC3F7A; --rep-soft:#FCE6EF; --rep-ink:#FFFFFF;
+  --asa:#3D8FD6; --hiru:#2D4FA8; --yu:#CC3F7A; --kan:#B067C4;
   --good:#2B7A4F; --bad:#B23C33;
   --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
   --f-num:"Outfit","Zen Kaku Gothic New",system-ui,sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#121614; --surface:#1A201C; --sunken:#151A17; --fg:#E5EBE7; --fg-2:#C3CCC6; --muted:#97A39C; --line:#2C3530;
-  --accent:#7CC7A8; --accent-ink:#0E1A14; --accent-soft:#1F3229;
-  --rep:#F0A06A; --rep-soft:#3A2618; --rep-ink:#1E1006;
-  --asa:#E8B84A; --hiru:#6CC29A; --yu:#F0A06A; --kan:#B7A0EA;
+  --bg:#11141C; --surface:#1A1F2B; --sunken:#151925; --fg:#E6EAF3; --fg-2:#C4CBDA; --muted:#98A1B6; --line:#2B3243;
+  --accent:#8FB0F0; --accent-ink:#0E1424; --accent-soft:#1E2A45;
+  --rep:#F28DB5; --rep-soft:#3A1C2A; --rep-ink:#2A0C19;
+  --asa:#7DBBF0; --hiru:#9CB2F2; --yu:#F28DB5; --kan:#D59BE6;
   --good:#6CC28C; --bad:#F08A80; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#121614; --surface:#1A201C; --sunken:#151A17; --fg:#E5EBE7; --fg-2:#C3CCC6; --muted:#97A39C; --line:#2C3530;
-  --accent:#7CC7A8; --accent-ink:#0E1A14; --accent-soft:#1F3229;
-  --rep:#F0A06A; --rep-soft:#3A2618; --rep-ink:#1E1006;
-  --asa:#E8B84A; --hiru:#6CC29A; --yu:#F0A06A; --kan:#B7A0EA;
+  --bg:#11141C; --surface:#1A1F2B; --sunken:#151925; --fg:#E6EAF3; --fg-2:#C4CBDA; --muted:#98A1B6; --line:#2B3243;
+  --accent:#8FB0F0; --accent-ink:#0E1424; --accent-soft:#1E2A45;
+  --rep:#F28DB5; --rep-soft:#3A1C2A; --rep-ink:#2A0C19;
+  --asa:#7DBBF0; --hiru:#9CB2F2; --yu:#F28DB5; --kan:#D59BE6;
   --good:#6CC28C; --bad:#F08A80; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55;-webkit-tap-highlight-color:transparent}
@@ -180,7 +180,7 @@ const f1 = n => (Math.round(n*10)/10).toFixed(1);
 const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + f1(Math.abs(n));
 
 const MEALS = [["asa","朝ごはん","--asa"],["hiru","昼ごはん","--hiru"],["yu","夕ごはん","--yu"],["kan","間食","--kan"]];
-const DEF_SETTINGS = { startDate: "2026-11-24", startWeight: null, goalWeight: null, presets: [{ name: "置き換えシェイク", kcal: null }] };
+const DEF_SETTINGS = { startDate: "2026-11-24", startWeight: null, goalWeight: null, presets: [{ name: "置き換えシェイク" }] };
 const emptyDay = date => ({ date, meals: { asa: [], hiru: [], yu: [], kan: [] }, replaced: false, weight: null, fat: null });
 const fillDay = (d, date) => { const e = emptyDay(date); if (!d) return e; return { ...e, ...d, meals: { ...e.meals, ...(d.meals || {}) } }; };
 
@@ -249,9 +249,9 @@ function signIn() {
 }
 
 /* ---------- 計算 ---------- */
-const sumK = items => items.reduce((a, it) => a + (Number(it.kcal) || 0), 0);
-const dayK = d => MEALS.reduce((a, [k]) => a + sumK(d.meals[k] || []), 0);
-const unknownK = d => MEALS.some(([k]) => (d.meals[k] || []).some(it => it.kcal == null || it.kcal === ""));
+const mealsDone = d => MEALS.slice(0, 3).filter(([k]) => (d.meals[k] || []).length).length;
+// 「、」「,」改行で区切って複数のメニューにする
+const splitMenus = t => t.split(/[、,，\n]+/).map(x => x.trim()).filter(Boolean).slice(0, 20);
 function weights() { return Object.values(S.days).filter(d => d && d.weight != null && d.weight !== "").map(d => ({ date: d.date, w: Number(d.weight) })).sort((a, b) => a.date.localeCompare(b.date)); }
 function latestWeight(upto) { const ws = weights().filter(x => x.date <= upto); return ws.length ? ws[ws.length-1] : null; }
 function prevWeight(before) { const ws = weights().filter(x => x.date < before); return ws.length ? ws[ws.length-1] : null; }
@@ -265,8 +265,8 @@ function streak() {
 function repCount() { return Object.values(S.days).filter(d => d && d.replaced).length; }
 function recentNames() {
   const c = {};
-  Object.values(S.days).forEach(d => MEALS.forEach(([k]) => ((d && d.meals && d.meals[k]) || []).forEach(it => { if (!it.rep && it.name) { const key = it.name; c[key] = c[key] || { name: it.name, kcal: it.kcal, n: 0 }; c[key].n++; } })));
-  return Object.values(c).sort((a, b) => b.n - a.n).slice(0, 8);
+  Object.values(S.days).forEach(d => MEALS.forEach(([k]) => ((d && d.meals && d.meals[k]) || []).forEach(it => { if (!it.rep && it.name) { const key = it.name; c[key] = c[key] || { name: it.name, n: 0 }; c[key].n++; } })));
+  return Object.values(c).sort((a, b) => b.n - a.n).slice(0, 30);
 }
 
 /* ---------- 描画 ---------- */
@@ -308,7 +308,6 @@ function viewToday() {
   const t = S.date, d = getDay(t), isToday = t === todayStr();
   const lw = latestWeight(t), sw = startWeight(), st = streak();
   const pw = prevWeight(t);
-  const k = dayK(d);
   let h = `<div class="top">
     <div class="datenav">
       <button class="navbtn" data-a="day" data-n="-1" aria-label="前の日">‹</button>
@@ -324,7 +323,7 @@ function viewToday() {
   h += `<div class="sum">
     <div class="tile rep"><span class="label">置き換え連続</span><b>${st}<small>日</small></b><span class="small muted">通算 <span class="num">${repCount()}</span>日</span></div>
     <div class="tile"><span class="label">スタートから</span><b class="${lw && sw != null ? (lw.w - sw <= 0 ? "t-good" : "t-bad") : ""}">${lw && sw != null ? signed(lw.w - sw) : "--"}<small>kg</small></b><span class="small muted">${sw != null ? "開始 " + f1(sw) + "kg" : "開始体重 未設定"}</span></div>
-    <div class="tile"><span class="label">この日の合計</span><b>${k ? Math.round(k) : "--"}<small>kcal</small></b><span class="small muted">${unknownK(d) ? "kcal未入力あり" : "わかる分だけ"}</span></div>
+    <div class="tile"><span class="label">この日の記録</span><b>${mealsDone(d)}<small>/3食</small></b><span class="small muted">間食 <span class="num">${(d.meals.kan || []).length}</span>品</span></div>
   </div>`;
 
   // 体重
@@ -343,19 +342,20 @@ function viewToday() {
   const recent = recentNames();
   for (const [key, label, c] of MEALS) {
     const items = d.meals[key] || [];
-    const kc = sumK(items);
     h += `<section class="card meal" style="--c:var(${c})" aria-labelledby="m-${key}">
-      <h2 class="h2" id="m-${key}"><span class="dot"></span>${label}${key === "yu" && d.replaced ? `<span class="repbadge">置き換え</span>` : ""}<span class="kc">${kc ? Math.round(kc) + " kcal" : ""}</span></h2>`;
+      <h2 class="h2" id="m-${key}"><span class="dot"></span>${label}${key === "yu" && d.replaced ? `<span class="repbadge">置き換え</span>` : ""}<span class="kc">${items.length ? items.length + "品" : ""}</span></h2>`;
     if (key === "yu") {
       h += `<div class="repbox">
         <div class="between"><span style="font-weight:700;font-size:14px">夕飯を置き換えた</span><button class="switch" role="switch" aria-checked="${!!d.replaced}" aria-label="夕飯を置き換えた" data-a="toggleRep"></button></div>
-        <div class="chips">${(S.settings.presets || []).map((p, i) => `<button class="chip" data-a="addPreset" data-i="${i}">＋ ${esc(p.name)}${p.kcal ? `<span class="min">${esc(p.kcal)}kcal</span>` : ""}</button>`).join("")}</div>
+        <div class="chips">${(S.settings.presets || []).map((p, i) => `<button class="chip" data-a="addPreset" data-i="${i}">＋ ${esc(p.name)}</button>`).join("")}</div>
         <span class="small muted">よく使う置き換え食品は「設定」で登録できます</span>
       </div>`;
     }
-    h += items.length ? `<ul class="items">${items.map(it => `<li>${it.rep ? `<span class="repbadge">置換</span>` : ""}<span class="nm">${esc(it.name)}</span><span class="v">${it.kcal != null && it.kcal !== "" ? esc(it.kcal) + " kcal" : ""}</span><button class="x" data-a="delItem" data-m="${key}" data-id="${esc(it.id)}" aria-label="${esc(it.name)}を削除">✕</button></li>`).join("")}</ul>`
+    h += items.length ? `<ul class="items">${items.map(it => `<li>${it.rep ? `<span class="repbadge">置換</span>` : ""}<span class="nm">${esc(it.name)}</span><button class="x" data-a="delItem" data-m="${key}" data-id="${esc(it.id)}" aria-label="${esc(it.name)}を削除">✕</button></li>`).join("")}</ul>`
       : `<p class="empty">${key === "kan" ? "食べていなければ空のままでOK" : "まだ記録がありません"}</p>`;
-    h += `<div class="add"><input class="in" id="n-${key}" type="text" maxlength="40" placeholder="${key === "kan" ? "例 チョコ2かけ" : "食べたもの"}" aria-label="${label}に食べたもの" list="recentList"><input class="in k" id="k-${key}" type="number" inputmode="numeric" min="0" step="1" placeholder="kcal" aria-label="カロリー（任意）"><button class="btn sm" data-a="addItem" data-m="${key}">追加</button></div>`;
+    h += `<div class="add"><input class="in" id="n-${key}" type="text" maxlength="200" placeholder="${key === "kan" ? "例 チョコ、コーヒー" : "例 ごはん、味噌汁、焼き鮭"}" aria-label="${label}に食べたもの（「、」で区切ると複数まとめて登録）" list="recentList"><button class="btn sm" data-a="addItem" data-m="${key}">追加</button></div>`;
+    const quick = recent.filter(r => !items.some(it => it.name === r.name)).slice(0, 8);
+    if (quick.length) h += `<div class="recent" aria-label="よく食べるもの">${quick.map(r => `<button data-a="quick" data-m="${key}" data-n="${esc(r.name)}">＋ ${esc(r.name)}</button>`).join("")}</div>`;
     h += `</section>`;
   }
   h += `<datalist id="recentList">${recent.map(r => `<option value="${esc(r.name)}"></option>`).join("")}</datalist>`;
@@ -408,8 +408,7 @@ function viewHist() {
   const list = Object.values(S.days).filter(d => d && (d.weight != null || d.replaced || MEALS.some(([k]) => (d.meals && d.meals[k] || []).length))).map(d => fillDay(d, d.date)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
   h += `<section class="card"><h2 class="h2">日ごとの記録</h2>${list.length ? `<ul class="days">${list.map(d => {
     const names = MEALS.map(([k, l]) => (d.meals[k] || []).length ? l.replace("ごはん", "") + "：" + d.meals[k].map(it => it.name).join("、") : "").filter(Boolean).join("　");
-    const k = dayK(d);
-    return `<li><button data-a="open" data-d="${d.date}"><span class="dt">${md(d.date)}<span class="muted" style="font-weight:500">（${WD[parse(d.date).getDay()]}）</span></span><span style="min-width:0;display:flex;flex-direction:column"><span class="row" style="gap:6px">${d.replaced ? `<span class="repbadge">置き換え</span>` : ""}${k ? `<span class="small num">${Math.round(k)} kcal</span>` : ""}</span><span class="sm">${esc(names) || "食事の記録なし"}</span></span><span class="wt">${d.weight != null ? f1(d.weight) + "kg" : "—"}</span></button></li>`;
+    return `<li><button data-a="open" data-d="${d.date}"><span class="dt">${md(d.date)}<span class="muted" style="font-weight:500">（${WD[parse(d.date).getDay()]}）</span></span><span style="min-width:0;display:flex;flex-direction:column"><span class="row" style="gap:6px">${d.replaced ? `<span class="repbadge">置き換え</span>` : ""}</span><span class="sm">${esc(names) || "食事の記録なし"}</span></span><span class="wt">${d.weight != null ? f1(d.weight) + "kg" : "—"}</span></button></li>`;
   }).join("")}</ul>` : `<p class="empty">まだ記録がありません。「今日」タブから始めよう。</p>`}</section>`;
   return h;
 }
@@ -427,8 +426,8 @@ function viewSet() {
   </section>`;
   h += `<section class="card"><h2 class="h2">よく使う置き換え食品</h2>
     <span class="small muted">夕ごはんのカードにボタンとして並びます。押すと1タップで記録＆「置き換えた」になります。</span>
-    ${(s.presets || []).map((p, i) => `<div class="preset"><span class="nm" style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(p.name)}</span><span class="num small muted">${p.kcal ? esc(p.kcal) + " kcal" : "kcal未設定"}</span><button class="x" data-a="delPreset" data-i="${i}" aria-label="${esc(p.name)}を削除">✕</button></div>`).join("") || `<p class="empty">まだありません</p>`}
-    <div class="preset"><input class="in" id="pN" type="text" maxlength="30" placeholder="例 プロテイン（ミルク割り）" aria-label="食品名"><input class="in k" id="pK" type="number" inputmode="numeric" min="0" placeholder="kcal" aria-label="カロリー"><button class="btn sm" data-a="addPreset2">追加</button></div>
+    ${(s.presets || []).map((p, i) => `<div class="preset"><span class="nm" style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(p.name)}</span><button class="x" data-a="delPreset" data-i="${i}" aria-label="${esc(p.name)}を削除">✕</button></div>`).join("") || `<p class="empty">まだありません</p>`}
+    <div class="preset"><input class="in" id="pN" type="text" maxlength="30" placeholder="例 プロテイン、スムージー" aria-label="食品名（「、」で区切ると複数まとめて登録）"><button class="btn sm" data-a="addPreset2">追加</button></div>
   </section>`;
   h += `<section class="card"><h2 class="h2">保存先</h2>
     <span class="small muted">${S.mode === "db" ? "Googleアカウント" + (S.user && S.user.email ? "（" + esc(S.user.email) + "）" : "") : "この端末だけ"}</span>
@@ -457,19 +456,19 @@ document.addEventListener("click", e => {
     toast(`${f1(w)}kg を記録しました`); return;
   }
   if (a === "addItem") {
-    const m = b.dataset.m, n = $("#n-" + m).value.trim(), kv = $("#k-" + m).value;
-    if (!n) { toast("食べたものを入れてください"); $("#n-" + m).focus(); return; }
-    let kcal = kv === "" ? null : Math.round(Number(kv));
-    if (kcal == null) { const r = recentNames().find(x => x.name === n); if (r && r.kcal != null) kcal = r.kcal; }
-    $("#n-" + m).value = ""; $("#k-" + m).value = "";
-    setDay(S.date, d => { d.meals[m].push({ id: uid(), name: n, kcal }); });
+    const m = b.dataset.m, names = splitMenus($("#n-" + m).value);
+    if (!names.length) { toast("食べたものを入れてください"); $("#n-" + m).focus(); return; }
+    $("#n-" + m).value = "";
+    setDay(S.date, d => { names.forEach(n => d.meals[m].push({ id: uid(), name: n })); });
+    if (names.length > 1) toast(`${names.length}品を記録しました`);
     return;
   }
+  if (a === "quick") { const m = b.dataset.m, n = b.dataset.n; setDay(S.date, d => { d.meals[m].push({ id: uid(), name: n }); }); return; }
   if (a === "delItem") { const m = b.dataset.m, id = b.dataset.id; setDay(S.date, d => { d.meals[m] = d.meals[m].filter(x => x.id !== id); if (m === "yu" && !d.meals.yu.some(x => x.rep) && d.replaced === "auto") d.replaced = false; }); return; }
   if (a === "toggleRep") { setDay(S.date, d => { d.replaced = !d.replaced; }); return; }
   if (a === "addPreset") {
     const p = (S.settings.presets || [])[+b.dataset.i]; if (!p) return;
-    setDay(S.date, d => { d.meals.yu.push({ id: uid(), name: p.name, kcal: p.kcal || null, rep: true }); d.replaced = true; });
+    setDay(S.date, d => { d.meals.yu.push({ id: uid(), name: p.name, rep: true }); d.replaced = true; });
     toast(`${p.name} で置き換え。えらい！`); return;
   }
   if (a === "saveGoal") {
@@ -478,10 +477,10 @@ document.addEventListener("click", e => {
     toast("保存しました"); return;
   }
   if (a === "addPreset2") {
-    const n = $("#pN").value.trim(), k = $("#pK").value;
-    if (!n) { toast("食品名を入れてください"); return; }
-    $("#pN").value = ""; $("#pK").value = "";
-    setSettings(s => { s.presets = [...(s.presets || []), { name: n, kcal: k === "" ? null : Math.round(Number(k)) }]; });
+    const names = splitMenus($("#pN").value);
+    if (!names.length) { toast("食品名を入れてください"); return; }
+    $("#pN").value = "";
+    setSettings(s => { const cur = s.presets || []; s.presets = [...cur, ...names.filter(n => !cur.some(p => p.name === n)).map(n => ({ name: n }))]; });
     return;
   }
   if (a === "delPreset") { const i = +b.dataset.i; setSettings(s => { s.presets = (s.presets || []).filter((_, j) => j !== i); }); return; }
@@ -489,8 +488,9 @@ document.addEventListener("click", e => {
 document.addEventListener("keydown", e => {
   if (e.key !== "Enter" || !e.target.id) return;
   const id = e.target.id;
-  const m = id.match(/^[nk]-(asa|hiru|yu|kan)$/);
+  const m = id.match(/^n-(asa|hiru|yu|kan)$/);
   if (m) { e.preventDefault(); document.querySelector(`[data-a="addItem"][data-m="${m[1]}"]`).click(); }
+  else if (id === "pN") { e.preventDefault(); document.querySelector('[data-a="addPreset2"]').click(); }
   else if (id === "wIn" || id === "fIn") { e.preventDefault(); document.querySelector('[data-a="saveW"]').click(); }
 });
 // 日付が変わったら「今日」を追従
