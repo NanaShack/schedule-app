@@ -248,8 +248,6 @@ var DEFAULT_SETTINGS = {
     { name: '洗濯', min: 45 }, { name: '掃除機', min: 20 }, { name: '料理', min: 40 }, { name: '皿洗い', min: 15 }, { name: 'ゴミ出し', min: 5 },
     { name: '風呂掃除', min: 20 }, { name: 'トイレ掃除', min: 10 }, { name: '買い物', min: 60 }, { name: '布団干し', min: 10 }, { name: 'アイロン', min: 30 }
   ],
-  diet: { goalWeight: null },
-  foods: [],
   tags: [{ id: 'tag-koyanagi', name: '小柳', color: '#5A5FAA' }],
   cats: [
     { id: 'work', name: '仕事', color: '#8A93A3', rule: 'pick', allow: ['work'] },
@@ -266,7 +264,7 @@ var DEFAULT_SETTINGS = {
   ]
 };
 var PALETTE = ['#8A93A3', '#B08A6A', '#ACAFD4', '#5A5FAA', '#6DB58A', '#EE9AC0', '#E8C55A', '#E07A7A', '#A48BD6', '#7EC8E8', '#BDB7B0', '#F0A86E'];
-function emptyDay(date) { return { date: date, events: [], tasks: [], actuals: [], wake: null, bed: null, note: '', workOff: null, meals: [], weight: null, steps: null }; }
+function emptyDay(date) { return { date: date, events: [], tasks: [], actuals: [], wake: null, bed: null, note: '', workOff: null, steps: null }; }
 function fillSettings(s) {
   var d = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
   if (!s) return d;
@@ -275,8 +273,6 @@ function fillSettings(s) {
     goal: { weekday: Object.assign(d.goal.weekday, (s.goal || {}).weekday || {}), holiday: Object.assign(d.goal.holiday, (s.goal || {}).holiday || {}) },
     chores: Array.isArray(s.chores) ? s.chores : d.chores,
     cats: Array.isArray(s.cats) && s.cats.length ? s.cats : d.cats,
-    diet: Object.assign({ goalWeight: null }, s.diet || {}),
-    foods: Array.isArray(s.foods) ? s.foods : [],
     tags: Array.isArray(s.tags) ? s.tags : d.tags
   };
 }
@@ -378,6 +374,7 @@ function useStore() {
     setState(function (s) {
       var cur = s.days[date] ? JSON.parse(JSON.stringify(s.days[date])) : emptyDay(date);
       var nextDay = updater(cur) || cur;
+      delete nextDay.meals; delete nextDay.weight;
       var days = Object.assign({}, s.days); days[date] = nextDay;
       var next = Object.assign({}, s, { days: days });
       if (s.mode === 'db') write('d-' + date, nextDay); else persistLocal(next);
@@ -654,17 +651,10 @@ function Home(props) {
       </button>
     </div>
     ${(function () {
-      var w = typeof day.weight === 'number' ? day.weight : null, st2 = typeof day.steps === 'number' ? day.steps : null, kc = kcalOf(day);
-      var gw = settings.diet && typeof settings.diet.goalWeight === 'number' ? settings.diet.goalWeight : null;
-      var lw = latestWeight(s.days, t);
-      return html`<button class="card" style="border:none;text-align:left;gap:8px" onClick=${props.onDiet}>
-        <span class="between label">ダイエット<span style="color:var(--accent);font-weight:700">記録 ›</span></span>
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
-          <span class="stack" style="gap:0"><span class="muted" style="font-size:11px">体重</span><span class="num" style="font-size:18px;font-weight:600">${w != null ? w.toFixed(1) : '--'}<span style="font-size:12px">kg</span></span>
-            ${gw != null && lw && html`<span class="muted" style="font-size:10px">${lw.value - gw > 0 ? '目標まで ' + (lw.value - gw).toFixed(1) + 'kg' : '目標達成'}</span>`}</span>
-          <span class="stack" style="gap:0"><span class="muted" style="font-size:11px">歩数</span><span class="num" style="font-size:18px;font-weight:600">${st2 != null ? st2.toLocaleString('ja-JP') : '--'}</span></span>
-          <span class="stack" style="gap:0"><span class="muted" style="font-size:11px">カロリー</span><span class="num" style="font-size:18px;font-weight:600">${kc != null ? kc.toLocaleString('ja-JP') : '--'}</span><span class="muted" style="font-size:10px">食事 ${mealsOf(day).length}件</span></span>
-        </div>
+      var st2 = typeof day.steps === 'number' ? day.steps : null;
+      return html`<button class="card" style="border:none;text-align:left;gap:4px" onClick=${props.onDiet}>
+        <span class="between label">今日の歩数<span style="color:var(--accent);font-weight:700">記録 ›</span></span>
+        <span class="num" style="font-size:18px;font-weight:600">${st2 != null ? st2.toLocaleString('ja-JP') : '--'}<span style="font-size:12px">歩</span></span>
       </button>`;
     })()}
     <div class="card">
@@ -1627,43 +1617,26 @@ function GoalSheet(props) {
   </${Sheet}>`;
 }
 
-/* ---------- ヘルス（睡眠・ダイエット） ---------- */
-var MEAL_SLOTS = [['breakfast', '朝食'], ['lunch', '昼食'], ['dinner', '夕食'], ['snack', '間食']];
-function mealsOf(day) { return (day && day.meals) || []; }
-function kcalOf(day) {
-  var list = mealsOf(day).filter(function (m) { return typeof m.kcal === 'number'; });
-  return list.length ? list.reduce(function (a, m) { return a + m.kcal; }, 0) : null;
-}
+/* ---------- ヘルス（睡眠・歩数） ---------- */
 function metricValue(days, date, metric) {
   var d = days[date];
   if (!d) return null;
-  if (metric === 'weight') return typeof d.weight === 'number' ? d.weight : null;
-  if (metric === 'steps') return typeof d.steps === 'number' ? d.steps : null;
-  return kcalOf(d);
+  return typeof d.steps === 'number' ? d.steps : null;
 }
 function fmtMetric(v, metric) {
   if (v == null) return '--';
-  if (metric === 'weight') return (Math.round(v * 10) / 10).toFixed(1) + 'kg';
-  if (metric === 'steps') return Math.round(v).toLocaleString('ja-JP') + '歩';
-  return Math.round(v).toLocaleString('ja-JP') + 'kcal';
+  return Math.round(v).toLocaleString('ja-JP') + '歩';
 }
 function fmtDiff(d, metric) {
   if (d == null) return '';
   var s = d > 0 ? '+' : d < 0 ? '−' : '±';
-  var a = Math.abs(d);
-  if (metric === 'weight') return s + (Math.round(a * 10) / 10).toFixed(1) + 'kg';
-  if (metric === 'steps') return s + Math.round(a).toLocaleString('ja-JP') + '歩';
-  return s + Math.round(a).toLocaleString('ja-JP') + 'kcal';
-}
-function latestWeight(days, upTo) {
-  for (var i = 0; i < 400; i++) { var d = addDays(upTo, -i), v = metricValue(days, d, 'weight'); if (v != null) return { value: v, date: d }; }
-  return null;
+  return s + Math.round(Math.abs(d)).toLocaleString('ja-JP') + '歩';
 }
 
 function Health(props) {
   return html`<div class="app">
     <div class="top"><h1 style="margin:0;font-size:22px">ヘルス</h1><${Gear} onClick=${props.onGear} /></div>
-    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['sleep', '睡眠'], ['diet', 'ダイエット']]} />
+    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['sleep', '睡眠'], ['diet', '歩数']]} />
     ${props.sub === 'sleep' ? html`<${SleepLog} ...${props} embedded=${true} />` : html`<${Diet} ...${props} />`}
   </div>`;
 }
@@ -1728,18 +1701,13 @@ function Diet(props) {
   var s = props.store.state, settings = s.settings;
   var dateS = useState(todayStr()), date = dateS[0];
   var day = getDay(s.days, date), prev = getDay(s.days, addDays(date, -1));
-  var meals = mealsOf(day);
   var sheet = useState(null);
-  var metricS = useState('weight'), metric = metricS[0];
+  var metric = 'steps';
   var modeS = useState('week'), mode = modeS[0];
   var anchorS = useState(todayStr()), anchor = anchorS[0];
-  var goal = settings.diet && typeof settings.diet.goalWeight === 'number' ? settings.diet.goalWeight : null;
   var t = todayStr();
 
-  var lw = latestWeight(s.days, date);
-  var weightPrevDiff = typeof day.weight === 'number' && typeof prev.weight === 'number' ? day.weight - prev.weight : null;
   var stepsPrevDiff = typeof day.steps === 'number' && typeof prev.steps === 'number' ? day.steps - prev.steps : null;
-  var kcal = kcalOf(day);
 
   function range(m, a) {
     if (m === 'week') { var l = []; for (var i = 6; i >= 0; i--) l.push(addDays(a, -i)); return l; }
@@ -1774,8 +1742,8 @@ function Diet(props) {
   }
   var curAvg = avg(cur), prevAvg = avg(prevVals);
   var periodName = mode === 'week' ? '前週' : mode === 'month' ? '前月' : '前年';
-  // 体重は減るとよい、歩数は増えるとよい、カロリーは評価しない
-  function tone(d) { if (d == null || metric === 'kcal') return ''; var good = metric === 'weight' ? d <= 0 : d >= 0; return good ? 'chip-good' : 'chip-bad'; }
+  // 歩数は増えるとよい
+  function tone(d) { if (d == null) return ''; return d >= 0 ? 'chip-good' : 'chip-bad'; }
 
   function saveNumber(field, v) {
     props.store.setDay(date, function (d) { d[field] = v; return d; });
@@ -1791,68 +1759,30 @@ function Diet(props) {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
-      <button class="card" style="border:none;text-align:left;gap:4px" onClick=${function () { sheet[1]({ type: 'weight' }); }}>
-        <span class="between label">体重<span style="color:var(--accent);font-weight:700">${typeof day.weight === 'number' ? '編集' : '入力'}</span></span>
-        <span class="big">${typeof day.weight === 'number' ? html`${day.weight.toFixed(1)}<small>kg</small>` : '--'}</span>
-        ${weightPrevDiff != null && html`<span style="font-size:12px;font-weight:500" class=${weightPrevDiff <= 0 ? 't-good' : 't-bad'}>前日より ${fmtDiff(weightPrevDiff, 'weight')}</span>`}
-        ${goal != null && lw && html`<span class="muted" style="font-size:12px">目標 ${goal.toFixed(1)}kg まで ${lw.value - goal > 0 ? 'あと ' + (lw.value - goal).toFixed(1) + 'kg' : '達成！'}</span>`}
-        ${goal == null && html`<span class="muted" style="font-size:11px">目標体重は下の「目標を設定」から</span>`}
-      </button>
       <button class="card" style="border:none;text-align:left;gap:4px" onClick=${function () { sheet[1]({ type: 'steps' }); }}>
         <span class="between label">歩数<span style="color:var(--accent);font-weight:700">${typeof day.steps === 'number' ? '編集' : '入力'}</span></span>
         <span class="big">${typeof day.steps === 'number' ? html`${day.steps.toLocaleString('ja-JP')}<small>歩</small>` : '--'}</span>
         ${stepsPrevDiff != null && html`<span style="font-size:12px;font-weight:500" class=${stepsPrevDiff >= 0 ? 't-good' : 't-bad'}>前日より ${fmtDiff(stepsPrevDiff, 'steps')}</span>`}
         <span class="muted" style="font-size:11px">iPhoneのヘルスケアの歩数を入力</span>
       </button>
-    </div>
-
-    <div class="card">
-      <div class="between"><span class="h2">食事</span><span class="muted" style="font-size:12px">${kcal != null ? '合計 ' + kcal.toLocaleString('ja-JP') + 'kcal' : meals.length + '件'}</span></div>
-      ${MEAL_SLOTS.map(function (slot) {
-        var list = meals.filter(function (m) { return m.slot === slot[0]; });
-        var sub = list.filter(function (m) { return typeof m.kcal === 'number'; }).reduce(function (a, m) { return a + m.kcal; }, 0);
-        return html`<div class="stack" style="gap:6px;border-top:1px solid var(--line-2);padding-top:10px">
-          <div class="between"><span style="font-size:13px;font-weight:700;color:var(--fg-2)">${slot[1]}${sub ? html`<span class="num muted" style="font-weight:500;margin-left:8px;font-size:12px">${sub}kcal</span>` : ''}</span>
-            <button class="btn small ghost" style="padding:4px 12px" onClick=${function () { sheet[1]({ type: 'meal', slot: slot[0], item: null }); }}>＋ 追加</button></div>
-          ${list.length ? list.map(function (m) {
-            return html`<button class="between" style="border:none;background:var(--surface-2);border-radius:10px;padding:8px 12px;text-align:left" onClick=${function () { sheet[1]({ type: 'meal', slot: slot[0], item: m }); }}>
-              <span style="font-size:14px;min-width:0;overflow-wrap:anywhere">${m.name}</span>
-              <span class="num muted" style="font-size:12px;white-space:nowrap">${typeof m.kcal === 'number' ? m.kcal + 'kcal' : ''}</span>
-            </button>`;
-          }) : html`<span class="muted" style="font-size:12px">まだ記録していません</span>`}
-        </div>`;
-      })}
-      <p class="muted" style="font-size:11px;margin:0">カロリーは書かなくても保存できます。わからないときは、写真をClaudeに送ると目安を計算してもらえます。</p>
-    </div>
 
     <div class="card" style="padding:14px 12px 12px">
-      <${Seg} label="グラフの項目" value=${metric} onChange=${metricS[1]} options=${[['weight', '体重'], ['steps', '歩数'], ['kcal', 'カロリー']]} />
       <${Seg} label="期間" value=${mode} onChange=${function (m) { modeS[1](m); anchorS[1](todayStr()); }} options=${[['week', '週'], ['month', '月'], ['year', '年']]} />
       <div class="between"><button class="iconbtn plain" aria-label="前へ" onClick=${function () { shift(-1); }}>‹</button><span style="font-size:13px;font-weight:500;text-align:center">${label}</span><button class="iconbtn plain" aria-label="次へ" onClick=${function () { shift(1); }}>›</button></div>
       <div class="stack" style="gap:6px;padding:0 4px">
         <span class="label">${mode === 'week' ? 'この週' : mode === 'month' ? 'この月' : 'この年'}の平均</span>
         <span class="big" style="font-size:28px">${fmtMetric(curAvg, metric)}</span>
         <div class="chips" style="gap:6px">
-          ${curAvg != null && prevAvg != null && html`<span class=${tone(curAvg - prevAvg) || 'chip-good'} style=${metric === 'kcal' ? 'background:var(--accent-soft);color:var(--fg)' : ''}>${periodName}の平均より ${fmtDiff(curAvg - prevAvg, metric)}</span>`}
-          ${metric === 'weight' && goal != null && curAvg != null && html`<span class=${curAvg <= goal ? 'chip-good' : 'chip-bad'}>目標より ${fmtDiff(curAvg - goal, 'weight')}</span>`}
+          ${curAvg != null && prevAvg != null && html`<span class=${tone(curAvg - prevAvg) || 'chip-good'}>${periodName}の平均より ${fmtDiff(curAvg - prevAvg, metric)}</span>`}
           ${curAvg == null && html`<span class="muted" style="font-size:12px">この期間の記録はまだありません。</span>`}
         </div>
       </div>
-      <${MetricChart} bars=${bars} metric=${metric} mode=${mode} goal=${metric === 'weight' ? goal : null} avg=${curAvg} />
+      <${MetricChart} bars=${bars} metric=${metric} mode=${mode} goal=${null} avg=${curAvg} />
       ${mode === 'year' && html`<span class="muted" style="font-size:11px;padding-left:4px">月ごとの平均です</span>`}
-      ${metric === 'kcal' && html`<span class="muted" style="font-size:11px;padding-left:4px">カロリーを書いた日だけ集計します</span>`}
-      <button class="btn small ghost" style="align-self:flex-start" onClick=${function () { sheet[1]({ type: 'goal' }); }}>${goal != null ? '目標体重 ' + goal.toFixed(1) + 'kg を変更' : '目標体重を設定'}</button>
     </div>
 
-    ${sheet[0] && sheet[0].type === 'meal' && html`<${MealSheet} key=${'m' + (sheet[0].item ? sheet[0].item.id : 'new') + sheet[0].slot} settings=${settings} date=${date} slot=${sheet[0].slot} item=${sheet[0].item} store=${props.store} toast=${props.toast} onClose=${function () { sheet[1](null); }} />`}
-    ${sheet[0] && sheet[0].type === 'weight' && html`<${NumberSheet} title=${jpDate(date) + 'の体重'} label="体重" unit="kg" step="0.1" decimal=${true} value=${day.weight} placeholder=${lw ? lw.value.toFixed(1) : '60.0'}
-      onSave=${function (v) { saveNumber('weight', v); props.toast('体重を記録しました'); }} onClear=${function () { saveNumber('weight', null); }} onClose=${function () { sheet[1](null); }} />`}
     ${sheet[0] && sheet[0].type === 'steps' && html`<${NumberSheet} title=${jpDate(date) + 'の歩数'} label="歩数" unit="歩" step="1" decimal=${false} value=${day.steps} placeholder="8000" note="iPhoneの「ヘルスケア」→「歩数」で、その日の合計を見て入力します。"
       onSave=${function (v) { saveNumber('steps', Math.round(v)); props.toast('歩数を記録しました'); }} onClear=${function () { saveNumber('steps', null); }} onClose=${function () { sheet[1](null); }} />`}
-    ${sheet[0] && sheet[0].type === 'goal' && html`<${NumberSheet} title="目標体重" label="目標体重" unit="kg" step="0.1" decimal=${true} value=${goal} placeholder="55.0"
-      onSave=${function (v) { props.store.setSettings(function (st) { st.diet = Object.assign({}, st.diet, { goalWeight: v }); return st; }); props.toast('目標体重を保存しました'); }}
-      onClear=${function () { props.store.setSettings(function (st) { st.diet = Object.assign({}, st.diet, { goalWeight: null }); return st; }); }} onClose=${function () { sheet[1](null); }} />`}
   </div>`;
 }
 
@@ -1872,51 +1802,6 @@ function NumberSheet(props) {
     </div>
     <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" style=${ok ? '' : 'opacity:.5'} onClick=${save}>保存</button></div>
     ${props.value != null && html`<button class="btn danger" onClick=${function () { props.onClear(); props.onClose(); }}>記録を消す</button>`}
-  </${Sheet}>`;
-}
-
-function MealSheet(props) {
-  var settings = props.settings, foods = settings.foods || [];
-  var item = props.item;
-  var f = useState({ slot: item ? item.slot : props.slot, name: item ? item.name : '', kcal: item && typeof item.kcal === 'number' ? String(item.kcal) : '' });
-  var v = f[0], set = function (k, val) { var n = Object.assign({}, v); n[k] = val; f[1](n); };
-  var saveFood = useState(!item);
-  var del = useState(false);
-  var q = v.name.trim();
-  var shown = q ? foods.filter(function (fd) { return fd.name.indexOf(q) !== -1; }) : foods;
-  var exists = foods.some(function (fd) { return fd.name === q; });
-  function save() {
-    if (!q) return;
-    var k = parseInt(v.kcal, 10);
-    var kcal = isNaN(k) ? null : Math.max(0, k);
-    var entry = { id: item ? item.id : uid(), slot: v.slot, name: q, kcal: kcal };
-    props.store.setDay(props.date, function (d) {
-      d.meals = (d.meals || []).filter(function (m) { return m.id !== entry.id; });
-      d.meals.push(entry);
-      return d;
-    });
-    if (saveFood[0] && !exists) props.store.setSettings(function (st) { st.foods = (st.foods || []).concat([{ name: q, kcal: kcal }]); return st; });
-    props.toast(item ? '食事を保存しました' : '食事を記録しました');
-    props.onClose();
-  }
-  function remove() {
-    props.store.setDay(props.date, function (d) { d.meals = (d.meals || []).filter(function (m) { return m.id !== item.id; }); return d; });
-    props.toast('食事を削除しました'); props.onClose();
-  }
-  return html`<${Sheet} title="食事" onClose=${props.onClose}>
-    <div class="between"><h2 class="h2" style="font-size:18px">${item ? '食事を編集' : '食事を記録'}</h2><span class="muted" style="font-size:13px">${jpDate(props.date)}</span></div>
-    <${Seg} label="食事の種類" value=${v.slot} onChange=${function (x) { set('slot', x); }} options=${MEAL_SLOTS} />
-    <label class="field" for="meal-name">食べたもの（必須）<input id="meal-name" class="input" value=${v.name} onInput=${function (e) { set('name', e.target.value); }} placeholder="例：鮭おにぎり、サラダチキン" /></label>
-    ${foods.length > 0 && html`<div class="stack"><span class="label">マイ食品から選ぶ${q && shown.length !== foods.length ? '（「' + q + '」を含むもの）' : ''}</span>
-      <div class="chips" style="max-height:150px;overflow-y:auto">${shown.length ? shown.map(function (fd) {
-        return html`<button class="chip" style="--c:#6DB58A" aria-pressed=${String(fd.name === q)} onClick=${function () { f[1](Object.assign({}, v, { name: fd.name, kcal: typeof fd.kcal === 'number' ? String(fd.kcal) : '' })); }}>${fd.name}${typeof fd.kcal === 'number' && html`<span class="min">${fd.kcal}kcal</span>`}</button>`;
-      }) : html`<span class="muted" style="font-size:12px">一致するマイ食品はありません</span>`}</div></div>`}
-    <label class="field" for="meal-kcal">カロリー（わかれば）
-      <span class="row"><input id="meal-kcal" class="input num" type="number" inputmode="numeric" min="0" value=${v.kcal} onInput=${function (e) { set('kcal', e.target.value); }} placeholder="例：180" /><span style="font-size:14px;font-weight:700;color:var(--fg)">kcal</span></span>
-    </label>
-    ${q && !exists && html`<label class="row" style="font-size:13px;color:var(--fg-2)"><input type="checkbox" checked=${saveFood[0]} onChange=${function (e) { saveFood[1](e.target.checked); }} style="width:18px;height:18px;accent-color:var(--accent)" />「${q}」をマイ食品に保存する</label>`}
-    <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" style=${q ? '' : 'opacity:.5'} onClick=${save}>保存</button></div>
-    ${item && (del[0] ? html`<div class="btns"><button class="btn sub" onClick=${function () { del[1](false); }}>やめる</button><button class="btn danger" onClick=${remove}>本当に削除する</button></div>` : html`<button class="btn danger" onClick=${function () { del[1](true); }}>この食事を削除</button>`)}
   </${Sheet}>`;
 }
 
@@ -2043,26 +1928,6 @@ function Settings(props) {
       <button style="border:none;background:none;padding:12px 14px;text-align:left;font-weight:700;color:var(--accent);font-size:14px" onClick=${function () { upd(function (st) { st.tags = (st.tags || []).concat([{ id: 'tag-' + uid(), name: '新しいタグ', color: '#ACAFD4' }]); return st; }); }}>＋ タグを追加</button>
     </div>
     <p class="muted" style="font-size:11px;margin:0">タグは重なりのルールとは関係ありません。予定に印をつけて、マンスリーで絞り込むためのものです。</p>
-
-    <span class="section-title">ダイエット</span>
-    <div class="card" style="padding:0;gap:0">
-      <div class="between" style="padding:12px 14px;border-bottom:1px solid var(--line-2)">
-        <label for="goal-w" style="font-size:14px">目標体重</label>
-        <span class="row" style="gap:6px"><input id="goal-w" class="timein" style="width:90px;text-align:right" type="number" inputmode="decimal" step="0.1" min="0" value=${settings.diet && settings.diet.goalWeight != null ? settings.diet.goalWeight : ''} placeholder="未設定"
-          onChange=${function (e) { var v = parseFloat(e.target.value); upd(function (st) { st.diet = Object.assign({}, st.diet, { goalWeight: isNaN(v) || v <= 0 ? null : Math.round(v * 10) / 10 }); return st; }); }} /><span style="font-size:13px">kg</span></span>
-      </div>
-      <span style="padding:10px 14px 4px;font-size:12px;color:var(--muted);font-weight:500">マイ食品（${(settings.foods || []).length}件）</span>
-      ${(settings.foods || []).map(function (fd, i) {
-        return html`<div class="row" style="gap:8px;padding:6px 14px;border-bottom:1px solid var(--line-2)">
-          <span style="flex-grow:1;font-size:14px;min-width:0;overflow-wrap:anywhere">${fd.name}</span>
-          <label class="sr" for=${'fk' + i}>${fd.name}のカロリー</label>
-          <input id=${'fk' + i} class="timein" style="width:80px;text-align:right;font-size:14px" type="number" inputmode="numeric" min="0" value=${typeof fd.kcal === 'number' ? fd.kcal : ''} placeholder="-"
-            onChange=${function (e) { var k = parseInt(e.target.value, 10); upd(function (st) { st.foods[i].kcal = isNaN(k) ? null : k; return st; }); }} /><span class="muted" style="font-size:12px">kcal</span>
-          <button class="stepper" aria-label=${fd.name + 'を削除'} style="color:var(--bad)" onClick=${function () { upd(function (st) { st.foods.splice(i, 1); return st; }); }}>×</button>
-        </div>`;
-      })}
-      ${!(settings.foods || []).length && html`<span style="padding:4px 14px 12px;font-size:12px" class="muted">食事を記録するときに「マイ食品に保存する」を選ぶと、ここに増えます。</span>`}
-    </div>
 
     <span class="section-title">そのほか</span>
     <div class="card" style="padding:0;gap:0">
