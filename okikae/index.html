@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2E6B57">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="置き換えごはん帳">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>置き換えごはん帳</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Outfit:wght@500;600;700&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{margin:0}
+[hidden]{display:none!important}
+/* Layout: スマホ1カラム。上に日付、今日のまとめ→体重→朝・昼・夕・間食のカード。下に固定タブ（今日／推移／設定） */
+:root{
+  --bg:#F3F5F2; --surface:#FFFFFF; --sunken:#E9EDE8; --fg:#1D2620; --fg-2:#3B4740; --muted:#5D6B63; --line:#DCE2DC;
+  --accent:#2E6B57; --accent-ink:#FFFFFF; --accent-soft:#E1EEE8;
+  --rep:#B85A22; --rep-soft:#FBEADF; --rep-ink:#FFFFFF;
+  --asa:#C08A12; --hiru:#3E8A6A; --yu:#B85A22; --kan:#7C64B0;
+  --good:#2B7A4F; --bad:#B23C33;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-num:"Outfit","Zen Kaku Gothic New",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121614; --surface:#1A201C; --sunken:#151A17; --fg:#E5EBE7; --fg-2:#C3CCC6; --muted:#97A39C; --line:#2C3530;
+  --accent:#7CC7A8; --accent-ink:#0E1A14; --accent-soft:#1F3229;
+  --rep:#F0A06A; --rep-soft:#3A2618; --rep-ink:#1E1006;
+  --asa:#E8B84A; --hiru:#6CC29A; --yu:#F0A06A; --kan:#B7A0EA;
+  --good:#6CC28C; --bad:#F08A80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121614; --surface:#1A201C; --sunken:#151A17; --fg:#E5EBE7; --fg-2:#C3CCC6; --muted:#97A39C; --line:#2C3530;
+  --accent:#7CC7A8; --accent-ink:#0E1A14; --accent-soft:#1F3229;
+  --rep:#F0A06A; --rep-soft:#3A2618; --rep-ink:#1E1006;
+  --asa:#E8B84A; --hiru:#6CC29A; --yu:#F0A06A; --kan:#B7A0EA;
+  --good:#6CC28C; --bad:#F08A80; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55;-webkit-tap-highlight-color:transparent}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--bg)}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.app{max-width:540px;margin:0 auto;display:flex;flex-direction:column;gap:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:14px calc(96px + env(safe-area-inset-bottom,0px))}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}
+.datenav{display:flex;align-items:center;gap:2px;margin-left:-8px;min-width:0}
+.datenav h1{margin:0;font-size:20px;font-weight:700;white-space:nowrap}
+.navbtn{width:40px;height:44px;border:0;background:transparent;font-size:22px;color:var(--fg-2);border-radius:10px}
+.todaybtn{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;color:var(--fg-2);margin-left:4px}
+.status{font-size:11px;color:var(--muted);white-space:nowrap}
+.card{background:var(--surface);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.h2{margin:0;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+.label{font-size:12px;color:var(--muted);font-weight:500}
+.between{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.banner{font-size:13px;background:var(--rep-soft);color:var(--fg);border-radius:12px;padding:10px 12px}
+
+/* summary */
+.sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{background:var(--surface);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile b{font-family:var(--f-num);font-size:24px;font-weight:600;line-height:1.15}
+.tile b small{font-size:13px;font-weight:500;color:var(--muted);margin-left:2px}
+.tile.rep b{color:var(--rep)}
+.t-good{color:var(--good)} .t-bad{color:var(--bad)}
+
+/* weight */
+.wrow{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field>span{font-size:12px;color:var(--muted);font-weight:500}
+.in{font-size:16px;padding:9px 11px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);min-width:0;width:100%}
+.in.w{width:7.5em;font-family:var(--f-num);font-size:20px;font-weight:600}
+.in.k{width:6em;font-family:var(--f-num)}
+.btn{border:0;border-radius:10px;padding:10px 14px;font-weight:700;background:var(--accent);color:var(--accent-ink);white-space:nowrap}
+.btn.sub{background:var(--sunken);color:var(--fg);font-weight:500}
+.btn.sm{padding:7px 12px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.wnote{font-size:13px;color:var(--fg-2)}
+
+/* meals */
+.meal{border-left:4px solid var(--c)}
+.meal .h2 .dot{width:10px;height:10px;border-radius:5px;background:var(--c)}
+.meal .kc{margin-left:auto;font-family:var(--f-num);font-size:13px;color:var(--muted);font-weight:600}
+.items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.items li{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed var(--line);min-width:0}
+.items li:last-child{border-bottom:0}
+.items .nm{flex:1;min-width:0;overflow-wrap:anywhere}
+.items .v{font-family:var(--f-num);font-size:13px;color:var(--fg-2);white-space:nowrap}
+.x{border:0;background:transparent;color:var(--muted);width:32px;height:32px;border-radius:8px;flex:none;font-size:16px}
+.x:hover{background:var(--sunken)}
+.repbadge{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--rep);color:var(--rep-ink);flex:none}
+.add{display:flex;gap:6px;align-items:center}
+.add .in{flex:1}
+.empty{font-size:13px;color:var(--muted);margin:0}
+.repbox{background:var(--rep-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1.5px solid var(--rep);background:var(--surface);color:var(--fg);border-radius:999px;padding:6px 12px;font-size:13px;min-height:36px}
+.chip .min{font-family:var(--f-num);font-size:11px;color:var(--muted);margin-left:4px}
+.switch{width:46px;height:28px;border-radius:14px;border:0;background:var(--line);position:relative;flex:none;padding:0}
+.switch::after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:11px;background:#fff;transition:left .15s}
+.switch[aria-checked="true"]{background:var(--rep)}
+.switch[aria-checked="true"]::after{left:21px}
+.recent{display:flex;flex-wrap:wrap;gap:6px}
+.recent button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 10px;font-size:12px;color:var(--fg-2)}
+
+/* history */
+.chart{width:100%;height:auto;display:block}
+.chart text{font-family:var(--f-num);font-size:11px;fill:var(--muted)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .goal{stroke:var(--good);stroke-width:1.5;stroke-dasharray:5 5}
+.chart .start{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 4}
+.chart .ln{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.chart .area{fill:var(--accent-soft)}
+.chart .pt{fill:var(--surface);stroke:var(--accent);stroke-width:2}
+.chart .last{fill:var(--accent)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:16px;border-top:2px solid;vertical-align:middle;margin-right:4px}
+.strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.strip .d{aspect-ratio:1;border-radius:8px;background:var(--sunken);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--f-num);font-size:11px;color:var(--muted);border:0;padding:0}
+.strip .d.on{background:var(--rep);color:var(--rep-ink);font-weight:600}
+.strip .d.today{outline:2px solid var(--accent);outline-offset:1px}
+.strip .d.future{opacity:.35}
+.strip .wd{font-size:11px;color:var(--muted);text-align:center;font-weight:700}
+.days{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.days li button{width:100%;border:0;background:transparent;text-align:left;display:grid;grid-template-columns:5.2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.days .dt{font-family:var(--f-num);font-size:13px;font-weight:600}
+.days .sm{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.days .wt{font-family:var(--f-num);font-size:14px;font-weight:600;text-align:right;white-space:nowrap}
+
+/* settings */
+.preset{display:flex;gap:6px;align-items:center}
+.preset .in{flex:1}
+
+/* nav */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
+  padding:6px max(8px,env(safe-area-inset-right,0px)) calc(8px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+.nav-in{max-width:540px;margin:0 auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.nav button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;font-size:11px;color:var(--muted)}
+.nav button[aria-current="page"]{color:var(--accent);font-weight:700}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--fg);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:13px;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <div class="top"><div class="datenav"><h1>置き換えごはん帳</h1></div></div>
+  <div class="card"><p class="empty">記録を読み込んでいます…</p></div>
+</div>
+<nav class="nav" aria-label="ページ"><div class="nav-in" id="nav"></div></nav>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="../firebase-config.js"></script>
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2, "0");
+const ymd = d => d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate()+n); return ymd(d); };
+const todayStr = () => ymd(new Date());
+const WD = "日月火水木金土";
+const jp = s => { const d = parse(s); return (d.getMonth()+1) + "月" + d.getDate() + "日（" + WD[d.getDay()] + "）"; };
+const md = s => { const d = parse(s); return (d.getMonth()+1) + "/" + d.getDate(); };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const f1 = n => (Math.round(n*10)/10).toFixed(1);
+const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + f1(Math.abs(n));
+
+const MEALS = [["asa","朝ごはん","--asa"],["hiru","昼ごはん","--hiru"],["yu","夕ごはん","--yu"],["kan","間食","--kan"]];
+const DEF_SETTINGS = { startDate: "2026-11-24", startWeight: null, goalWeight: null, presets: [{ name: "置き換えシェイク", kcal: null }] };
+const emptyDay = date => ({ date, meals: { asa: [], hiru: [], yu: [], kan: [] }, replaced: false, weight: null, fat: null });
+const fillDay = (d, date) => { const e = emptyDay(date); if (!d) return e; return { ...e, ...d, meals: { ...e.meals, ...(d.meals || {}) } }; };
+
+/* ---------- 保存（クラウド db／この端末） ---------- */
+const LS = "okikae-gohan-v1";
+const S = { mode: "loading", user: null, days: {}, settings: { ...DEF_SETTINGS }, view: "today", date: todayStr(), error: "" };
+let col = null;
+const q = {};
+function lsSave() { if (S.mode !== "local") return; try { localStorage.setItem(LS, JSON.stringify({ days: S.days, settings: S.settings })); } catch (e) {} }
+function lsLoad() { try { const j = JSON.parse(localStorage.getItem(LS) || "null"); if (j) { S.days = j.days || {}; S.settings = { ...DEF_SETTINGS, ...(j.settings || {}) }; } } catch (e) {} }
+function write(id, data) {
+  if (S.mode === "db") {
+    q[id] = (q[id] || Promise.resolve()).then(() => col.doc(id).set(JSON.parse(JSON.stringify(data)))).catch(e => {
+      toast(e && e.code === "permission_denied" ? "保存する権限がありません" : "保存できませんでした。通信を確認してもう一度お試しください");
+    });
+  } else lsSave();
+}
+function getDay(date) { return fillDay(S.days[date], date); }
+function setDay(date, fn) {
+  const d = JSON.parse(JSON.stringify(getDay(date)));
+  const nd = fn(d) || d;
+  S.days[date] = nd; write("d-" + date, nd); render();
+}
+function setSettings(fn) {
+  const s = JSON.parse(JSON.stringify(S.settings));
+  S.settings = fn(s) || s; write("settings", S.settings); render();
+}
+
+/* Firebase（スケジュール帳と同じアカウント・同じプロジェクト。保存先は users/<uid>/okikae） */
+const CFG = window.FIREBASE_CONFIG || {};
+let FB = !!(window.firebase && CFG.apiKey && CFG.projectId), fbAuth = null, fbDb = null, unsub = null;
+if (FB) {
+  try {
+    firebase.initializeApp(CFG);
+    fbAuth = firebase.auth(); fbDb = firebase.firestore();
+    fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+  } catch (e) { FB = false; }
+}
+const LOCAL_FLAG = "okikae-gohan-local";
+const wantLocal = () => { try { return localStorage.getItem(LOCAL_FLAG) === "1"; } catch (e) { return false; } };
+const setWantLocal = v => { try { v ? localStorage.setItem(LOCAL_FLAG, "1") : localStorage.removeItem(LOCAL_FLAG); } catch (e) {} };
+function goLocal() { S.mode = "local"; S.user = null; lsLoad(); render(); }
+function connect() {
+  if (wantLocal() || !FB) { goLocal(); return; }
+  fbAuth.onAuthStateChanged(user => {
+    if (unsub) { unsub(); unsub = null; }
+    if (!user) { col = null; S.mode = "signin"; S.user = null; S.days = {}; S.settings = { ...DEF_SETTINGS }; render(); return; }
+    S.user = { name: user.displayName || "", email: user.email || "" };
+    S.mode = "loading"; render();
+    col = fbDb.collection("users").doc(user.uid).collection("okikae");
+    unsub = col.onSnapshot(snap => {
+      const days = {}; let settings = null;
+      snap.docs.forEach(d => { const v = d.data(); if (!v) return; if (d.id === "settings") settings = v; else if (d.id.startsWith("d-")) days[d.id.slice(2)] = v; });
+      S.days = days; S.settings = { ...DEF_SETTINGS, ...(settings || {}) }; S.mode = "db"; S.error = "";
+      render();
+    }, err => { S.error = "データを読み込めませんでした（" + ((err && err.code) || "エラー") + "）"; if (S.mode === "loading") S.mode = "signin"; render(); });
+  });
+}
+function signIn() {
+  const p = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(p).catch(e => {
+    if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) return fbAuth.signInWithRedirect(p);
+    if (e && e.code === "auth/popup-closed-by-user") return;
+    S.error = "ログインできませんでした（" + ((e && e.code) || "エラー") + "）"; render();
+  });
+}
+
+/* ---------- 計算 ---------- */
+const sumK = items => items.reduce((a, it) => a + (Number(it.kcal) || 0), 0);
+const dayK = d => MEALS.reduce((a, [k]) => a + sumK(d.meals[k] || []), 0);
+const unknownK = d => MEALS.some(([k]) => (d.meals[k] || []).some(it => it.kcal == null || it.kcal === ""));
+function weights() { return Object.values(S.days).filter(d => d && d.weight != null && d.weight !== "").map(d => ({ date: d.date, w: Number(d.weight) })).sort((a, b) => a.date.localeCompare(b.date)); }
+function latestWeight(upto) { const ws = weights().filter(x => x.date <= upto); return ws.length ? ws[ws.length-1] : null; }
+function prevWeight(before) { const ws = weights().filter(x => x.date < before); return ws.length ? ws[ws.length-1] : null; }
+function startWeight() { if (S.settings.startWeight) return Number(S.settings.startWeight); const ws = weights(); return ws.length ? ws[0].w : null; }
+function streak() {
+  let n = 0, d = todayStr();
+  if (!getDay(d).replaced) d = addDays(d, -1); // 今日まだなら昨日から数える
+  while (getDay(d).replaced) { n++; d = addDays(d, -1); }
+  return n;
+}
+function repCount() { return Object.values(S.days).filter(d => d && d.replaced).length; }
+function recentNames() {
+  const c = {};
+  Object.values(S.days).forEach(d => MEALS.forEach(([k]) => ((d && d.meals && d.meals[k]) || []).forEach(it => { if (!it.rep && it.name) { const key = it.name; c[key] = c[key] || { name: it.name, kcal: it.kcal, n: 0 }; c[key].n++; } })));
+  return Object.values(c).sort((a, b) => b.n - a.n).slice(0, 8);
+}
+
+/* ---------- 描画 ---------- */
+let toastT = 0;
+function toast(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2400); }
+const ICON = {
+  today: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 12h16a8 8 0 0 1-16 0z"/><path d="M8 8c0-2 2-2 2-4M13 8c0-2 2-2 2-4"/></svg>',
+  chart: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19h16"/><path d="M5 15l4-5 4 3 6-7"/></svg>',
+  gear: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>'
+};
+function renderNav() {
+  $("#nav").innerHTML = [["today","今日",ICON.today],["hist","推移",ICON.chart],["set","設定",ICON.gear]]
+    .map(([k, l, ic]) => `<button data-a="view" data-v="${k}" ${S.view === k ? 'aria-current="page"' : ""}>${ic}${l}</button>`).join("");
+}
+function statusText() { return S.mode === "db" ? (S.error ? esc(S.error) : "保存済み") : S.mode === "local" ? "この端末に保存" : "読み込み中…"; }
+function viewSignin() {
+  return `<div class="top"><div class="datenav" style="margin-left:0"><h1>置き換えごはん帳</h1></div></div>
+  <section class="card"><h2 class="h2">ログイン</h2>
+    <p style="margin:0">スケジュール帳と同じGoogleアカウントでログインすると、iPhoneとPCで同じ記録が見られます。</p>
+    ${S.error ? `<div class="banner">${esc(S.error)}</div>` : ""}
+    <button class="btn" data-a="signin">Googleでログイン</button>
+    <button class="btn sub" data-a="uselocal">ログインせずにこの端末だけで使う</button>
+  </section>`;
+}
+
+function render() {
+  renderNav();
+  const app = $("#app");
+  const keep = document.activeElement && document.activeElement.id && app.contains(document.activeElement) ? document.activeElement.id : null;
+  const vals = {}; app.querySelectorAll("input[id]").forEach(el => vals[el.id] = el.value);
+  if (S.mode === "loading") return;
+  if (S.mode === "signin") { $("#nav").innerHTML = ""; app.innerHTML = viewSignin(); return; }
+  app.innerHTML = S.view === "today" ? viewToday() : S.view === "hist" ? viewHist() : viewSet();
+  for (const [id, v] of Object.entries(vals)) { const el = document.getElementById(id); if (el && !el.dataset.fresh) el.value = v; }
+  if (keep) { const el = document.getElementById(keep); if (el) el.focus(); }
+}
+
+function viewToday() {
+  const t = S.date, d = getDay(t), isToday = t === todayStr();
+  const lw = latestWeight(t), sw = startWeight(), st = streak();
+  const pw = prevWeight(t);
+  const k = dayK(d);
+  let h = `<div class="top">
+    <div class="datenav">
+      <button class="navbtn" data-a="day" data-n="-1" aria-label="前の日">‹</button>
+      <h1>${jp(t)}</h1>
+      <button class="navbtn" data-a="day" data-n="1" aria-label="次の日">›</button>
+      ${isToday ? "" : `<button class="todaybtn" data-a="gotoday">今日</button>`}
+    </div>
+    <span class="status">${statusText()}</span>
+  </div>`;
+  if (S.mode === "local") h += `<div class="banner">この端末の中だけに保存しています。${FB ? "「設定」からログインすると、どの端末からでも同じ記録が見られます。" : ""}</div>`;
+  if (!S.settings.startWeight && !weights().length) h += `<div class="banner">まず今朝の体重を入れてみよう。最初の記録がスタート体重になります（設定で変更できます）。</div>`;
+
+  h += `<div class="sum">
+    <div class="tile rep"><span class="label">置き換え連続</span><b>${st}<small>日</small></b><span class="small muted">通算 <span class="num">${repCount()}</span>日</span></div>
+    <div class="tile"><span class="label">スタートから</span><b class="${lw && sw != null ? (lw.w - sw <= 0 ? "t-good" : "t-bad") : ""}">${lw && sw != null ? signed(lw.w - sw) : "--"}<small>kg</small></b><span class="small muted">${sw != null ? "開始 " + f1(sw) + "kg" : "開始体重 未設定"}</span></div>
+    <div class="tile"><span class="label">この日の合計</span><b>${k ? Math.round(k) : "--"}<small>kcal</small></b><span class="small muted">${unknownK(d) ? "kcal未入力あり" : "わかる分だけ"}</span></div>
+  </div>`;
+
+  // 体重
+  const goal = S.settings.goalWeight ? Number(S.settings.goalWeight) : null;
+  h += `<section class="card" aria-labelledby="wT">
+    <h2 class="h2" id="wT">体重</h2>
+    <div class="wrow">
+      <label class="field"><span>体重（kg）</span><input class="in w" id="wIn" type="number" inputmode="decimal" step="0.1" min="20" max="250" placeholder="${lw ? f1(lw.w) : "例 60.0"}" value="${d.weight != null ? esc(d.weight) : ""}" data-fresh="1"></label>
+      <label class="field"><span>体脂肪率（%・任意）</span><input class="in k" id="fIn" type="number" inputmode="decimal" step="0.1" min="1" max="70" value="${d.fat != null ? esc(d.fat) : ""}" data-fresh="1"></label>
+      <button class="btn" data-a="saveW">${d.weight != null ? "更新" : "記録"}</button>
+    </div>
+    <p class="wnote" style="margin:0">${d.weight != null && pw ? `前回（${md(pw.date)}）より <b class="num ${d.weight - pw.w <= 0 ? "t-good" : "t-bad"}">${signed(d.weight - pw.w)}kg</b>` : d.weight != null ? "最初の記録です" : "毎朝同じタイミング（起きてトイレのあと）に量ると比べやすいよ"}${goal && d.weight != null ? `　目標まで <b class="num">${f1(Math.max(0, d.weight - goal))}kg</b>` : ""}</p>
+  </section>`;
+
+  // 食事
+  const recent = recentNames();
+  for (const [key, label, c] of MEALS) {
+    const items = d.meals[key] || [];
+    const kc = sumK(items);
+    h += `<section class="card meal" style="--c:var(${c})" aria-labelledby="m-${key}">
+      <h2 class="h2" id="m-${key}"><span class="dot"></span>${label}${key === "yu" && d.replaced ? `<span class="repbadge">置き換え</span>` : ""}<span class="kc">${kc ? Math.round(kc) + " kcal" : ""}</span></h2>`;
+    if (key === "yu") {
+      h += `<div class="repbox">
+        <div class="between"><span style="font-weight:700;font-size:14px">夕飯を置き換えた</span><button class="switch" role="switch" aria-checked="${!!d.replaced}" aria-label="夕飯を置き換えた" data-a="toggleRep"></button></div>
+        <div class="chips">${(S.settings.presets || []).map((p, i) => `<button class="chip" data-a="addPreset" data-i="${i}">＋ ${esc(p.name)}${p.kcal ? `<span class="min">${esc(p.kcal)}kcal</span>` : ""}</button>`).join("")}</div>
+        <span class="small muted">よく使う置き換え食品は「設定」で登録できます</span>
+      </div>`;
+    }
+    h += items.length ? `<ul class="items">${items.map(it => `<li>${it.rep ? `<span class="repbadge">置換</span>` : ""}<span class="nm">${esc(it.name)}</span><span class="v">${it.kcal != null && it.kcal !== "" ? esc(it.kcal) + " kcal" : ""}</span><button class="x" data-a="delItem" data-m="${key}" data-id="${esc(it.id)}" aria-label="${esc(it.name)}を削除">✕</button></li>`).join("")}</ul>`
+      : `<p class="empty">${key === "kan" ? "食べていなければ空のままでOK" : "まだ記録がありません"}</p>`;
+    h += `<div class="add"><input class="in" id="n-${key}" type="text" maxlength="40" placeholder="${key === "kan" ? "例 チョコ2かけ" : "食べたもの"}" aria-label="${label}に食べたもの" list="recentList"><input class="in k" id="k-${key}" type="number" inputmode="numeric" min="0" step="1" placeholder="kcal" aria-label="カロリー（任意）"><button class="btn sm" data-a="addItem" data-m="${key}">追加</button></div>`;
+    h += `</section>`;
+  }
+  h += `<datalist id="recentList">${recent.map(r => `<option value="${esc(r.name)}"></option>`).join("")}</datalist>`;
+  return h;
+}
+
+function chartSvg(ws, sw, goal) {
+  if (!ws.length) return `<p class="empty">体重を記録するとここにグラフが出ます。</p>`;
+  const W = 520, H = 220, L = 40, R = 14, T = 14, B = 26;
+  const vals = ws.map(x => x.w).concat(sw != null ? [sw] : [], goal ? [goal] : []);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 2) { const m = (hi + lo) / 2; lo = m - 1; hi = m + 1; }
+  lo = Math.floor(lo * 2) / 2 - 0.5; hi = Math.ceil(hi * 2) / 2 + 0.5;
+  const t0 = parse(ws[0].date).getTime(), t1 = Math.max(parse(ws[ws.length-1].date).getTime(), t0 + 6 * 864e5);
+  const x = s => L + (parse(s).getTime() - t0) / (t1 - t0) * (W - L - R);
+  const y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const step = (hi - lo) > 6 ? 2 : (hi - lo) > 3 ? 1 : 0.5;
+  let g = "";
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) g += `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${step < 1 ? v.toFixed(1) : v}</text>`;
+  const days = Math.round((t1 - t0) / 864e5), tick = Math.max(1, Math.ceil(days / 5));
+  for (let i = 0; i <= days; i += tick) { const s = ymd(new Date(t0 + i * 864e5)); g += `<text x="${x(s)}" y="${H-6}" text-anchor="middle">${md(s)}</text>`; }
+  if (sw != null) g += `<line class="start" x1="${L}" x2="${W-R}" y1="${y(sw)}" y2="${y(sw)}"/>`;
+  if (goal) g += `<line class="goal" x1="${L}" x2="${W-R}" y1="${y(goal)}" y2="${y(goal)}"/>`;
+  const pts = ws.map(p => `${x(p.date).toFixed(1)},${y(p.w).toFixed(1)}`);
+  const area = ws.length > 1 ? `<path class="area" d="M${x(ws[0].date)},${H-B} L${pts.join(" L")} L${x(ws[ws.length-1].date)},${H-B}Z" opacity=".7"/>` : "";
+  const line = ws.length > 1 ? `<polyline class="ln" points="${pts.join(" ")}"/>` : "";
+  const dots = ws.map((p, i) => `<circle class="${i === ws.length-1 ? "last" : "pt"}" cx="${x(p.date)}" cy="${y(p.w)}" r="${i === ws.length-1 ? 5 : 3}"/>`).join("");
+  const lp = ws[ws.length-1];
+  const lab = `<text x="${Math.min(x(lp.date), W-R-4)}" y="${y(lp.w)-10}" text-anchor="end" style="fill:var(--fg);font-weight:600;font-size:12px">${f1(lp.w)}kg</text>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="体重の推移。最新 ${f1(lp.w)}kg">${g}${area}${line}${dots}${lab}</svg>
+    <div class="legend"><span><i style="border-color:var(--accent)"></i>体重</span>${sw != null ? `<span><i style="border-color:var(--muted);border-top-style:dotted"></i>スタート ${f1(sw)}kg</span>` : ""}${goal ? `<span><i style="border-color:var(--good);border-top-style:dashed"></i>目標 ${f1(goal)}kg</span>` : ""}</div>`;
+}
+
+function viewHist() {
+  const ws = weights().slice(-60), sw = startWeight(), goal = S.settings.goalWeight ? Number(S.settings.goalWeight) : null;
+  const t = todayStr();
+  let h = `<div class="top"><div class="datenav" style="margin-left:0"><h1>推移</h1></div><span class="status">${statusText()}</span></div>`;
+  h += `<section class="card"><h2 class="h2">体重</h2>${chartSvg(ws, sw, goal)}</section>`;
+  // 4週カレンダー
+  const end = addDays(t, 6 - parse(t).getDay());
+  let cells = "";
+  for (let i = 27; i >= 0; i--) {
+    const s = addDays(end, -i), dd = getDay(s);
+    cells += `<button class="d ${dd.replaced ? "on" : ""} ${s === t ? "today" : ""} ${s > t ? "future" : ""}" data-a="open" data-d="${s}" aria-label="${jp(s)}${dd.replaced ? " 置き換えた" : ""}"><span>${parse(s).getDate()}</span></button>`;
+  }
+  h += `<section class="card"><div class="between"><h2 class="h2">夕飯の置き換え</h2><span class="small muted">連続 <b class="num">${streak()}</b>日・通算 <b class="num">${repCount()}</b>日</span></div>
+    <div class="strip">${[..."日月火水木金土"].map(w => `<span class="wd">${w}</span>`).join("")}${cells}</div>
+    <span class="small muted">色つき＝置き換えた日。タップでその日の記録を開きます</span></section>`;
+  // 日ごとの一覧
+  const list = Object.values(S.days).filter(d => d && (d.weight != null || d.replaced || MEALS.some(([k]) => (d.meals && d.meals[k] || []).length))).map(d => fillDay(d, d.date)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
+  h += `<section class="card"><h2 class="h2">日ごとの記録</h2>${list.length ? `<ul class="days">${list.map(d => {
+    const names = MEALS.map(([k, l]) => (d.meals[k] || []).length ? l.replace("ごはん", "") + "：" + d.meals[k].map(it => it.name).join("、") : "").filter(Boolean).join("　");
+    const k = dayK(d);
+    return `<li><button data-a="open" data-d="${d.date}"><span class="dt">${md(d.date)}<span class="muted" style="font-weight:500">（${WD[parse(d.date).getDay()]}）</span></span><span style="min-width:0;display:flex;flex-direction:column"><span class="row" style="gap:6px">${d.replaced ? `<span class="repbadge">置き換え</span>` : ""}${k ? `<span class="small num">${Math.round(k)} kcal</span>` : ""}</span><span class="sm">${esc(names) || "食事の記録なし"}</span></span><span class="wt">${d.weight != null ? f1(d.weight) + "kg" : "—"}</span></button></li>`;
+  }).join("")}</ul>` : `<p class="empty">まだ記録がありません。「今日」タブから始めよう。</p>`}</section>`;
+  return h;
+}
+
+function viewSet() {
+  const s = S.settings;
+  let h = `<div class="top"><div class="datenav" style="margin-left:0"><h1>設定</h1></div><span class="status">${statusText()}</span></div>`;
+  h += `<section class="card"><h2 class="h2">体重の目標</h2>
+    <div class="row">
+      <label class="field"><span>スタート体重（kg）</span><input class="in w" id="sW" type="number" inputmode="decimal" step="0.1" value="${s.startWeight != null ? esc(s.startWeight) : ""}" placeholder="${startWeight() != null ? f1(startWeight()) : ""}" data-fresh="1"></label>
+      <label class="field"><span>目標体重（kg）</span><input class="in w" id="gW" type="number" inputmode="decimal" step="0.1" value="${s.goalWeight != null ? esc(s.goalWeight) : ""}" data-fresh="1"></label>
+    </div>
+    <span class="small muted">スタート体重を空にすると、最初に記録した体重を使います。開始日 ${jp(s.startDate || todayStr())}</span>
+    <div><button class="btn" data-a="saveGoal">保存</button></div>
+  </section>`;
+  h += `<section class="card"><h2 class="h2">よく使う置き換え食品</h2>
+    <span class="small muted">夕ごはんのカードにボタンとして並びます。押すと1タップで記録＆「置き換えた」になります。</span>
+    ${(s.presets || []).map((p, i) => `<div class="preset"><span class="nm" style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(p.name)}</span><span class="num small muted">${p.kcal ? esc(p.kcal) + " kcal" : "kcal未設定"}</span><button class="x" data-a="delPreset" data-i="${i}" aria-label="${esc(p.name)}を削除">✕</button></div>`).join("") || `<p class="empty">まだありません</p>`}
+    <div class="preset"><input class="in" id="pN" type="text" maxlength="30" placeholder="例 プロテイン（ミルク割り）" aria-label="食品名"><input class="in k" id="pK" type="number" inputmode="numeric" min="0" placeholder="kcal" aria-label="カロリー"><button class="btn sm" data-a="addPreset2">追加</button></div>
+  </section>`;
+  h += `<section class="card"><h2 class="h2">保存先</h2>
+    <span class="small muted">${S.mode === "db" ? "Googleアカウント" + (S.user && S.user.email ? "（" + esc(S.user.email) + "）" : "") : "この端末だけ"}</span>
+    <div>${S.mode === "db" ? `<button class="btn sub sm" data-a="signout">ログアウト</button>` : FB ? `<button class="btn sm" data-a="usecloud">Googleでログインして使う</button>` : ""}</div>
+  </section>`;
+  return h;
+}
+
+/* ---------- 操作 ---------- */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-a]"); if (!b) return;
+  const a = b.dataset.a;
+  if (a === "signin") { signIn(); return; }
+  if (a === "uselocal") { setWantLocal(true); goLocal(); return; }
+  if (a === "usecloud") { setWantLocal(false); location.reload(); return; }
+  if (a === "signout") { fbAuth.signOut(); return; }
+  if ((S.mode === "loading" || S.mode === "signin") && a !== "view") return;
+  if (a === "view") { S.view = b.dataset.v; render(); window.scrollTo(0, 0); return; }
+  if (a === "day") { S.date = addDays(S.date, +b.dataset.n); render(); return; }
+  if (a === "gotoday") { S.date = todayStr(); render(); return; }
+  if (a === "open") { S.date = b.dataset.d; S.view = "today"; render(); window.scrollTo(0, 0); return; }
+  if (a === "saveW") {
+    const w = parseFloat($("#wIn").value), f = $("#fIn").value === "" ? null : parseFloat($("#fIn").value);
+    if (!(w >= 20 && w <= 250)) { toast("体重を数字で入れてください"); return; }
+    setDay(S.date, d => { d.weight = Math.round(w * 10) / 10; d.fat = f != null && f > 0 ? Math.round(f * 10) / 10 : null; });
+    toast(`${f1(w)}kg を記録しました`); return;
+  }
+  if (a === "addItem") {
+    const m = b.dataset.m, n = $("#n-" + m).value.trim(), kv = $("#k-" + m).value;
+    if (!n) { toast("食べたものを入れてください"); $("#n-" + m).focus(); return; }
+    let kcal = kv === "" ? null : Math.round(Number(kv));
+    if (kcal == null) { const r = recentNames().find(x => x.name === n); if (r && r.kcal != null) kcal = r.kcal; }
+    $("#n-" + m).value = ""; $("#k-" + m).value = "";
+    setDay(S.date, d => { d.meals[m].push({ id: uid(), name: n, kcal }); });
+    return;
+  }
+  if (a === "delItem") { const m = b.dataset.m, id = b.dataset.id; setDay(S.date, d => { d.meals[m] = d.meals[m].filter(x => x.id !== id); if (m === "yu" && !d.meals.yu.some(x => x.rep) && d.replaced === "auto") d.replaced = false; }); return; }
+  if (a === "toggleRep") { setDay(S.date, d => { d.replaced = !d.replaced; }); return; }
+  if (a === "addPreset") {
+    const p = (S.settings.presets || [])[+b.dataset.i]; if (!p) return;
+    setDay(S.date, d => { d.meals.yu.push({ id: uid(), name: p.name, kcal: p.kcal || null, rep: true }); d.replaced = true; });
+    toast(`${p.name} で置き換え。えらい！`); return;
+  }
+  if (a === "saveGoal") {
+    const sw = $("#sW").value, gw = $("#gW").value;
+    setSettings(s => { s.startWeight = sw === "" ? null : Math.round(parseFloat(sw) * 10) / 10; s.goalWeight = gw === "" ? null : Math.round(parseFloat(gw) * 10) / 10; });
+    toast("保存しました"); return;
+  }
+  if (a === "addPreset2") {
+    const n = $("#pN").value.trim(), k = $("#pK").value;
+    if (!n) { toast("食品名を入れてください"); return; }
+    $("#pN").value = ""; $("#pK").value = "";
+    setSettings(s => { s.presets = [...(s.presets || []), { name: n, kcal: k === "" ? null : Math.round(Number(k)) }]; });
+    return;
+  }
+  if (a === "delPreset") { const i = +b.dataset.i; setSettings(s => { s.presets = (s.presets || []).filter((_, j) => j !== i); }); return; }
+});
+document.addEventListener("keydown", e => {
+  if (e.key !== "Enter" || !e.target.id) return;
+  const id = e.target.id;
+  const m = id.match(/^[nk]-(asa|hiru|yu|kan)$/);
+  if (m) { e.preventDefault(); document.querySelector(`[data-a="addItem"][data-m="${m[1]}"]`).click(); }
+  else if (id === "wIn" || id === "fIn") { e.preventDefault(); document.querySelector('[data-a="saveW"]').click(); }
+});
+// 日付が変わったら「今日」を追従
+let lastToday = todayStr();
+setInterval(() => { const t = todayStr(); if (t !== lastToday) { if (S.date === lastToday) S.date = t; lastToday = t; render(); } }, 60000);
+
+renderNav();
+connect();
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+})();
+</script>
+
+</body>
+</html>

@@ -12,6 +12,7 @@ Googleアカウントでログインすると、PCとスマホで同じデータ
 | `firestore.rules` | データベースのルール（本人だけが読み書きできる） |
 | `manifest.webmanifest`, `sw.js`, `icons/` | ホーム画面に追加するための設定とアイコン |
 | `vendor/htm-preact.js` | 画面を作るためのライブラリ（htm 3.1.1 + Preact） |
+| `okikae/` | 置き換えごはん帳（三食・間食・体重の記録）。`https://nanashack.github.io/schedule-app/okikae/` で開く |
 
 ## Firebase の準備（初回だけ）
 
@@ -43,3 +44,10 @@ Googleアカウントでログインすると、PCとスマホで同じデータ
 
 1. claude.ai 版の「設定」→「データを書き出す」でファイルを保存
 2. このアプリにログインして「設定」→「データを読み込む」でそのファイルを選ぶ
+
+## 置き換えごはん帳（okikae/）
+
+夕飯の置き換えダイエット用に、三食・間食・体重を記録するアプリです。
+スケジュール帳と同じ Firebase プロジェクトとGoogleアカウントを使い、データは `users/<自分のID>/okikae` に保存されます。
+今の `firestore.rules`（本人だけが `users/<自分のID>/` の下を読み書きできる）のままで使えるので、Firebase 側の追加設定はいりません。
+ホーム画面には `https://nanashack.github.io/schedule-app/okikae/` を開いてから追加します。
