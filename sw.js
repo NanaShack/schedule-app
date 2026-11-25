@@ -1,5 +1,5 @@
 // アプリの画面をキャッシュして、電波が弱いときも開けるようにする
-var CACHE = 'schedule-book-v10';
+var CACHE = 'schedule-book-v11';
 var SHELL = ['./', 'index.html', 'firebase-config.js', 'vendor/htm-preact.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-32.png', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); }));

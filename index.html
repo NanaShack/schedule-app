@@ -273,7 +273,8 @@ function fillSettings(s) {
     goal: { weekday: Object.assign(d.goal.weekday, (s.goal || {}).weekday || {}), holiday: Object.assign(d.goal.holiday, (s.goal || {}).holiday || {}) },
     chores: Array.isArray(s.chores) ? s.chores : d.chores,
     cats: Array.isArray(s.cats) && s.cats.length ? s.cats : d.cats,
-    tags: Array.isArray(s.tags) ? s.tags : d.tags
+    tags: Array.isArray(s.tags) ? s.tags : d.tags,
+    monthNotes: s.monthNotes && typeof s.monthNotes === 'object' ? s.monthNotes : {}
   };
 }
 
@@ -720,8 +721,12 @@ function Monthly(props) {
   var cells = monthCells(y, m);
   var t = todayStr();
   var day = getDay(s.days, sel);
-  var sleeps = cells.filter(function (c) { return !c.out; }).map(function (c) { var x = sleepFor(s.days, c.date); return x ? x.min : null; }).filter(function (v) { return v != null; });
-  var monthAvg = avg(sleeps);
+  var sub = props.sub === 'actual' ? 'diary' : props.sub;
+  var ymKey = y + '-' + String(m + 1).padStart(2, '0');
+  var monthNote = (settings.monthNotes || {})[ymKey] || '';
+  var sumState = useState(null); var editingSum = sumState[0], setEditingSum = sumState[1];
+  useEffect(function () { setEditingSum(null); }, [ymKey]);
+  var diaryDays = Object.keys(s.days).filter(function (k) { return k.slice(0, 7) === ymKey && s.days[k].note && s.days[k].note.trim(); }).sort();
   var noteState = useState(null); var editingNote = noteState[0], setEditingNote = noteState[1];
   var tagFilter = useState(null);
   function passTag(e) { return !tagFilter[0] || ((e.tags || []).indexOf(tagFilter[0]) !== -1); }
@@ -736,16 +741,33 @@ function Monthly(props) {
       </div>
       <${Gear} onClick=${props.onGear} />
     </div>
-    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['plan', '予定'], ['actual', '実績']]} />
-    ${props.sub === 'actual' && html`<button class="card tight" style="border:none;flex-direction:row;align-items:center;gap:12px;text-align:left" onClick=${props.onSleep}>
-      ${ART.moon}
-      <span class="stack" style="gap:0;flex-grow:1"><span class="label" style="font-size:11px">今月の平均睡眠</span><span class="num" style="font-size:18px;font-weight:600">${monthAvg != null ? dur(monthAvg) : '--'}</span></span>
-      <span style="font-size:13px;font-weight:700;color:var(--accent)">睡眠の記録 ›</span>
-    </button>`}
-    ${props.sub === 'plan' && allTags.length > 0 && html`<div class="chips" role="group" aria-label="タグで絞り込む">
+    <${Seg} label="表示" value=${sub} onChange=${props.setSub} options=${[['plan', '予定'], ['diary', '日記'], ['summary', 'まとめ']]} />
+    ${sub === 'plan' && allTags.length > 0 && html`<div class="chips" role="group" aria-label="タグで絞り込む">
       <button class="chip" aria-pressed=${String(!tagFilter[0])} onClick=${function () { tagFilter[1](null); }}>すべて</button>
       ${allTags.map(function (t) { return html`<button class="chip" style=${'--c:' + t.color} aria-pressed=${String(tagFilter[0] === t.id)} onClick=${function () { tagFilter[1](tagFilter[0] === t.id ? null : t.id); }}><span class="dot"></span>${t.name}</button>`; })}
     </div>`}
+    ${sub === 'summary' ? html`
+    <div class="card" style="flex-direction:row;align-items:flex-start;gap:12px">
+      ${ART.notebook}
+      <div class="stack" style="flex-grow:1;min-width:0;gap:6px">
+        <span class="h2" style="font-size:14px">${m + 1}月の出来事まとめ</span>
+        ${editingSum != null ? html`<label class="sr" for="sum-input">今月の出来事まとめ</label>
+          <textarea id="sum-input" class="input" style="min-height:160px" value=${editingSum} onInput=${function (e) { setEditingSum(e.target.value); }} placeholder=${'例：\n・推しのライブに行った\n・新しいカフェを見つけた'}></textarea>
+          <div class="btns"><button class="btn sub" onClick=${function () { setEditingSum(null); }}>キャンセル</button>
+          <button class="btn" onClick=${function () { var v = editingSum; props.store.setSettings(function (st) { st.monthNotes = st.monthNotes || {}; if (v.trim()) st.monthNotes[ymKey] = v; else delete st.monthNotes[ymKey]; return st; }); setEditingSum(null); props.toast('まとめを保存しました'); }}>保存</button></div>`
+        : html`<span style="font-size:13px;line-height:1.7;color:var(--fg-2);white-space:pre-wrap;overflow-wrap:anywhere">${monthNote || 'まだ書いていません。下の日記を見ながら、今月あったことをまとめられます。'}</span>
+          <button class="btn small ghost" style="align-self:flex-start" onClick=${function () { setEditingSum(monthNote); }}>${monthNote ? 'まとめを編集' : 'まとめを書く'}</button>`}
+      </div>
+    </div>
+    <div class="card">
+      <div class="between"><span class="h2" style="font-size:14px">今月の日記</span><span class="muted" style="font-size:12px">${diaryDays.length}日分</span></div>
+      ${diaryDays.length ? diaryDays.map(function (k) {
+        return html`<button class="evrow" style="--c:#E8C55A" onClick=${function () { setSel(k); props.setSub('diary'); }}>
+          <span class="time">${parse(k).getDate()}日（${DOW[parse(k).getDay()]}）</span>
+          <span class="body"><span style="white-space:pre-wrap;overflow-wrap:anywhere;color:var(--fg)">${s.days[k].note.trim()}</span></span>
+        </button>`;
+      }) : html`<div class="empty">${ART.notebook}<span>この月の日記はまだありません。「日記」から書けます。</span></div>`}
+    </div>` : html`
     <div class="cal">
       <div class="cal-head">${DOW.map(function (d) { return html`<span>${d}</span>`; })}</div>
       <div class="cal-grid">${cells.map(function (c) {
@@ -753,18 +775,17 @@ function Monthly(props) {
         var cls = 'cell' + (c.date === sel ? ' sel' : '') + (c.date === t ? ' today' : '') + (c.out ? ' out' : '');
         var dcls = 'd' + (c.dow === 0 || isNatHoliday(c.date) ? ' sun' : c.dow === 6 ? ' sat' : '');
         var body;
-        if (props.sub === 'plan') {
+        if (sub === 'plan') {
           var evs = d ? d.events.filter(passTag).sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); }) : [];
           body = html`${evs.slice(0, 2).map(function (e) { var tg = tagsOf(settings, e); return html`<span class="ev" style=${'--c:' + colorOf(cm, e.cat)}>${tg.length > 0 && html`<span style=${'color:' + tg[0].color + ';margin-right:1px'}>●</span>`}${e.title}</span>`; })}${evs.length > 2 && html`<span class="more">ほか${evs.length - 2}件</span>`}`;
         } else {
-          var sl = sleepFor(s.days, c.date);
-          body = html`${sl && html`<span class="sl">${hm(sl.min)}</span>`}${d && d.note && html`<span class="note">${d.note.split('\n')[0]}</span>`}`;
+          body = html`${d && d.note && html`<span class="note">${d.note.split('\n')[0]}</span>`}`;
         }
         return html`<button class=${cls} aria-label=${jpDate(c.date)} onClick=${function () { setSel(c.date); if (c.out) { var dd = parse(c.date); ym[1]([dd.getFullYear(), dd.getMonth()]); } }}><span class=${dcls}>${c.n}</span>${body}</button>`;
       })}</div>
-    </div>
+    </div>`}
 
-    ${props.sub === 'plan' ? html`<div class="card">
+    ${sub === 'summary' ? null : sub === 'plan' ? html`<div class="card">
       <div class="between"><span class="h2">${jpDate(sel)}${isNatHoliday(sel) ? '・祝日' : ''}</span>
         <button class="btn small ghost" onClick=${function () { props.onTimetable(sel); }}>時間割を見る</button></div>
       ${day.events.filter(passTag).length ? day.events.filter(passTag).sort(function (a, b) { return (a.allDay ? -1 : toMin(a.start)) - (b.allDay ? -1 : toMin(b.start)); }).map(function (e) {
@@ -776,18 +797,16 @@ function Monthly(props) {
     </div>` : html`<div class="card" style="flex-direction:row;align-items:flex-start;gap:12px">
       ${ART.notebook}
       <div class="stack" style="flex-grow:1;min-width:0;gap:6px">
-        <div class="between"><span class="h2" style="font-size:14px">${jpDate(sel)}</span>
-          ${(function () { var sl = sleepFor(s.days, sel); return html`<button style="border:none;background:none;padding:4px;font-size:12px;color:var(--accent);font-weight:500" onClick=${props.onSleep}>睡眠 <span class="num" style="font-weight:600">${sl ? dur(sl.min) : '--'}</span> ›</button>`; })()}
-        </div>
-        ${editingNote != null ? html`<label class="sr" for="note-input">あった出来事</label>
-          <textarea id="note-input" class="input" value=${editingNote} onInput=${function (e) { setEditingNote(e.target.value); }} placeholder="例：駅前の新しいカフェに行った"></textarea>
+        <span class="h2" style="font-size:14px">${jpDate(sel)}の日記</span>
+        ${editingNote != null ? html`<label class="sr" for="note-input">日記</label>
+          <textarea id="note-input" class="input" style="min-height:140px" value=${editingNote} onInput=${function (e) { setEditingNote(e.target.value); }} placeholder="例：駅前の新しいカフェに行った。ケーキがおいしかった"></textarea>
           <div class="btns"><button class="btn sub" onClick=${function () { setEditingNote(null); }}>キャンセル</button>
-          <button class="btn" onClick=${function () { var v = editingNote; props.store.setDay(sel, function (d) { d.note = v; return d; }); setEditingNote(null); props.toast('出来事を保存しました'); }}>保存</button></div>`
+          <button class="btn" onClick=${function () { var v = editingNote; props.store.setDay(sel, function (d) { d.note = v; return d; }); setEditingNote(null); props.toast('日記を保存しました'); }}>保存</button></div>`
         : html`<span style="font-size:13px;line-height:1.7;color:var(--fg-2);white-space:pre-wrap;overflow-wrap:anywhere">${day.note || 'まだ書いていません。'}</span>
-          <button class="btn small ghost" style="align-self:flex-start" onClick=${function () { setEditingNote(day.note || ''); }}>${day.note ? '出来事を編集' : '出来事を書く'}</button>`}
+          <button class="btn small ghost" style="align-self:flex-start" onClick=${function () { setEditingNote(day.note || ''); }}>${day.note ? '日記を編集' : '日記を書く'}</button>`}
       </div>
     </div>`}
-    ${props.sub === 'plan' && html`<button class="fab" aria-label="予定を追加" onClick=${function () { props.onNewEvent(sel); }}>${I.plus}</button>`}
+    ${sub === 'plan' && html`<button class="fab" aria-label="予定を追加" onClick=${function () { props.onNewEvent(sel); }}>${I.plus}</button>`}
   </div>`;
 }
 
