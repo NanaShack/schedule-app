@@ -522,6 +522,47 @@ var ART = {
 };
 
 /* ---------- 共通部品 ---------- */
+/* タグの追加・名前・色・削除 */
+function TagEditor(props) {
+  var tags = props.settings.tags || [];
+  var newName = useState(''), confirmDel = useState(null);
+  function upd(fn) { props.store.setSettings(fn); }
+  function add() {
+    var n = newName[0].trim(); if (!n) return;
+    if (tags.some(function (t) { return t.name === n; })) { props.toast && props.toast('同じ名前のタグがあります'); return; }
+    var used = tags.map(function (t) { return t.color; });
+    var color = PALETTE.find(function (c) { return used.indexOf(c) === -1; }) || PALETTE[tags.length % PALETTE.length];
+    upd(function (st) { st.tags = (st.tags || []).concat([{ id: 'tag-' + uid(), name: n, color: color }]); return st; });
+    newName[1](''); props.toast && props.toast('タグ「' + n + '」を追加しました');
+  }
+  return html`<div class="card" style="padding:0;gap:0">
+    ${tags.map(function (t, i) {
+      return html`<div class="row" style="gap:8px;padding:8px 14px;border-bottom:1px solid var(--line-2);flex-wrap:wrap">
+        <label class="sr" for=${'tg-' + t.id}>タグの名前</label>
+        <input id=${'tg-' + t.id} class="input" style="flex:1 1 120px;padding:6px 10px;font-size:14px" value=${t.name} onChange=${function (e) { var v = e.target.value.trim(); if (v) upd(function (st) { st.tags[i].name = v; return st; }); else e.target.value = t.name; }} />
+        <div class="row" style="gap:4px;flex-wrap:wrap">${PALETTE.slice(0, 8).map(function (c) {
+          return html`<button class="swatch" style=${'--c:' + c + ';width:22px;height:22px'} aria-label=${'色 ' + c} aria-pressed=${String(t.color === c)} onClick=${function () { upd(function (st) { st.tags[i].color = c; return st; }); }}></button>`;
+        })}</div>
+        ${confirmDel[0] === t.id
+          ? html`<span class="row" style="gap:6px;flex-basis:100%;justify-content:flex-end"><span class="muted" style="font-size:12px">予定についた印も消えます</span><button class="btn small sub" onClick=${function () { confirmDel[1](null); }}>やめる</button><button class="btn small danger" onClick=${function () { upd(function (st) { st.tags = st.tags.filter(function (x) { return x.id !== t.id; }); return st; }); confirmDel[1](null); }}>削除</button></span>`
+          : html`<button class="stepper" aria-label=${t.name + 'を削除'} style="color:var(--bad)" onClick=${function () { confirmDel[1](t.id); }}>×</button>`}
+      </div>`;
+    })}
+    <div class="row" style="padding:10px 12px;gap:8px">
+      <label class="sr" for="tg-new">新しいタグの名前</label>
+      <input id="tg-new" class="input" style="flex-grow:1" value=${newName[0]} onInput=${function (e) { newName[1](e.target.value); }} onKeyDown=${function (e) { if (e.key === 'Enter' && !e.isComposing) add(); }} placeholder="タグを追加（例：ライブ）" />
+      <button class="btn small" style="padding:10px 14px;border-radius:10px;white-space:nowrap;flex:none" onClick=${add}>追加</button>
+    </div>
+  </div>`;
+}
+function TagSheet(props) {
+  return html`<${Sheet} title="タグの編集" onClose=${props.onClose}>
+    <h2 class="h2" style="font-size:18px">タグの編集</h2>
+    <${TagEditor} settings=${props.settings} store=${props.store} toast=${props.toast} />
+    <p class="muted" style="font-size:11px;margin:0">名前と色はすぐに保存されます。タグは予定の画面でつけられます。</p>
+    <button class="btn" onClick=${props.onClose}>閉じる</button>
+  </${Sheet}>`;
+}
 function Sheet(props) {
   useEffect(function () {
     function onKey(e) { if (e.key === 'Escape') props.onClose(); }
@@ -731,6 +772,8 @@ function Monthly(props) {
   var tagFilter = useState(null);
   function passTag(e) { return !tagFilter[0] || ((e.tags || []).indexOf(tagFilter[0]) !== -1); }
   var allTags = settings.tags || [];
+  var tagSheet = useState(false);
+  useEffect(function () { if (tagFilter[0] && !allTags.some(function (t) { return t.id === tagFilter[0]; })) tagFilter[1](null); }, [allTags]);
 
   return html`<div class="app">
     <div class="top">
@@ -742,9 +785,10 @@ function Monthly(props) {
       <${Gear} onClick=${props.onGear} />
     </div>
     <${Seg} label="表示" value=${sub} onChange=${props.setSub} options=${[['plan', '予定'], ['diary', '日記'], ['summary', 'まとめ']]} />
-    ${sub === 'plan' && allTags.length > 0 && html`<div class="chips" role="group" aria-label="タグで絞り込む">
-      <button class="chip" aria-pressed=${String(!tagFilter[0])} onClick=${function () { tagFilter[1](null); }}>すべて</button>
+    ${sub === 'plan' && html`<div class="chips" role="group" aria-label="タグで絞り込む">
+      ${allTags.length > 0 && html`<button class="chip" aria-pressed=${String(!tagFilter[0])} onClick=${function () { tagFilter[1](null); }}>すべて</button>`}
       ${allTags.map(function (t) { return html`<button class="chip" style=${'--c:' + t.color} aria-pressed=${String(tagFilter[0] === t.id)} onClick=${function () { tagFilter[1](tagFilter[0] === t.id ? null : t.id); }}><span class="dot"></span>${t.name}</button>`; })}
+      <button class="chip" style="border-style:dashed;color:var(--accent);font-weight:700" onClick=${function () { tagSheet[1](true); }}>${allTags.length ? '✎ タグを編集' : '＋ タグを作る'}</button>
     </div>`}
     ${sub === 'summary' ? html`
     <div class="card" style="flex-direction:row;align-items:flex-start;gap:12px">
@@ -806,6 +850,7 @@ function Monthly(props) {
           <button class="btn small ghost" style="align-self:flex-start" onClick=${function () { setEditingNote(day.note || ''); }}>${day.note ? '日記を編集' : '日記を書く'}</button>`}
       </div>
     </div>`}
+    ${tagSheet[0] && html`<${TagSheet} settings=${settings} store=${props.store} toast=${props.toast} onClose=${function () { tagSheet[1](false); }} />`}
     ${sub === 'plan' && html`<button class="fab" aria-label="予定を追加" onClick=${function () { props.onNewEvent(sel); }}>${I.plus}</button>`}
   </div>`;
 }
@@ -817,6 +862,20 @@ function EventSheet(props) {
   var f = useState({ date: props.date, title: init.title, cat: init.cat, allDay: !!init.allDay, start: init.start || '10:00', end: init.end || '11:00', memo: init.memo || '', tags: (init.tags || []).slice() });
   var v = f[0], set = function (k, val) { var n = Object.assign({}, v); n[k] = val; f[1](n); };
   var del = useState(false);
+  var newTag = useState(null);
+  function addTag() {
+    var n = (newTag[0] || '').trim(); if (!n) return;
+    var tags = settings.tags || [];
+    var same = tags.find(function (t) { return t.name === n; });
+    var id = same ? same.id : 'tag-' + uid();
+    if (!same) {
+      var used = tags.map(function (t) { return t.color; });
+      var color = PALETTE.find(function (c) { return used.indexOf(c) === -1; }) || PALETTE[tags.length % PALETTE.length];
+      props.store.setSettings(function (st) { st.tags = (st.tags || []).concat([{ id: id, name: n, color: color }]); return st; });
+    }
+    if (v.tags.indexOf(id) === -1) set('tags', v.tags.concat([id]));
+    newTag[1](null);
+  }
   var day = getDay(props.days, v.date);
   var others = planItems(settings, day).filter(function (o) { return !(o.src === 'event' && o.id === init.id); });
   var cand = { key: 'new', cat: v.cat, start: toMin(v.start), end: toMin(v.end) > toMin(v.start) ? toMin(v.end) : toMin(v.end) + 1440 };
@@ -851,11 +910,18 @@ function EventSheet(props) {
       </span></div>`}
     </div>
     <div class="stack"><span class="label">カテゴリ</span><${CatChips} settings=${settings} value=${v.cat} onChange=${function (c) { set('cat', c); }} /></div>
-    ${(settings.tags || []).length > 0 && html`<div class="stack"><span class="label">タグ（カテゴリや時間に関係なく、いくつでもつけられます）</span>
-      <div class="chips">${settings.tags.map(function (t) {
+    ${html`<div class="stack"><span class="label">タグ（カテゴリや時間に関係なく、いくつでもつけられます）</span>
+      <div class="chips">${(settings.tags || []).map(function (t) {
         var on = v.tags.indexOf(t.id) !== -1;
         return html`<button class="chip" style=${'--c:' + t.color} aria-pressed=${String(on)} onClick=${function () { set('tags', on ? v.tags.filter(function (x) { return x !== t.id; }) : v.tags.concat([t.id])); }}>${on ? '✓ ' : '# '}${t.name}</button>`;
-      })}</div></div>`}
+      })}${newTag[0] == null ? html`<button class="chip" style="border-style:dashed;color:var(--accent);font-weight:700" onClick=${function () { newTag[1](''); }}>＋ 新しいタグ</button>` : null}</div>
+      ${newTag[0] != null && html`<div class="row" style="gap:8px">
+        <label class="sr" for="ev-newtag">新しいタグの名前</label>
+        <input id="ev-newtag" class="input" style="flex-grow:1" value=${newTag[0]} onInput=${function (e) { newTag[1](e.target.value); }} onKeyDown=${function (e) { if (e.key === 'Enter' && !e.isComposing) addTag(); }} placeholder="例：ライブ" />
+        <button class="btn small sub" style="padding:10px 12px;border-radius:10px;white-space:nowrap;flex:none" onClick=${function () { newTag[1](null); }}>やめる</button>
+        <button class="btn small" style="padding:10px 14px;border-radius:10px;white-space:nowrap;flex:none" onClick=${addTag}>追加</button>
+      </div>`}
+    </div>`}
     <${ConflictNote} cm=${cm} list=${conflicts} okText=${overlapsOk.length ? overlapsOk.map(function (o) { return '「' + o.title + '」'; }).join('、') + 'と時間が重なりますが、重なってOKの組み合わせです。' : ''} />
     <label class="field" for="ev-memo">場所・メモ<input id="ev-memo" class="input" value=${v.memo} onInput=${function (e) { set('memo', e.target.value); }} placeholder="例：会場名、持ち物" /></label>
     <div class="btns"><button class="btn sub" onClick=${props.onClose}>キャンセル</button><button class="btn" disabled=${!v.title.trim()} style=${v.title.trim() ? '' : 'opacity:.5'} onClick=${save}>${conflicts.length ? 'このまま保存' : '保存'}</button></div>
@@ -1933,19 +1999,7 @@ function Settings(props) {
     <p class="muted" style="font-size:11px;margin:0">ルールは、重なった2つの予定のどちらから見てもOKなら警告しません。「常にOK」のカテゴリは相手に関係なく警告しません。</p>
 
     <span class="section-title">予定のタグ</span>
-    <div class="card" style="padding:0;gap:0">
-      ${(settings.tags || []).map(function (t, i) {
-        return html`<div class="row" style="gap:8px;padding:8px 14px;border-bottom:1px solid var(--line-2);flex-wrap:wrap">
-          <label class="sr" for=${'tg' + i}>タグの名前</label>
-          <input id=${'tg' + i} class="input" style="flex:1 1 120px;padding:6px 10px;font-size:14px" value=${t.name} onChange=${function (e) { var v = e.target.value.trim(); if (v) upd(function (st) { st.tags[i].name = v; return st; }); }} />
-          <span class="row" style="gap:4px">${['#5A5FAA', '#ACAFD4', '#6DB58A', '#EE9AC0', '#E8C55A', '#E07A7A', '#A48BD6', '#7EC8E8'].map(function (c) {
-            return html`<button class="swatch" style=${'--c:' + c + ';width:22px;height:22px'} aria-label=${'色 ' + c} aria-pressed=${String(t.color === c)} onClick=${function () { upd(function (st) { st.tags[i].color = c; return st; }); }}></button>`;
-          })}</span>
-          <button class="stepper" aria-label=${t.name + 'を削除'} style="color:var(--bad)" onClick=${function () { upd(function (st) { st.tags.splice(i, 1); return st; }); }}>×</button>
-        </div>`;
-      })}
-      <button style="border:none;background:none;padding:12px 14px;text-align:left;font-weight:700;color:var(--accent);font-size:14px" onClick=${function () { upd(function (st) { st.tags = (st.tags || []).concat([{ id: 'tag-' + uid(), name: '新しいタグ', color: '#ACAFD4' }]); return st; }); }}>＋ タグを追加</button>
-    </div>
+    <${TagEditor} settings=${settings} store=${store} toast=${props.toast} />
     <p class="muted" style="font-size:11px;margin:0">タグは重なりのルールとは関係ありません。予定に印をつけて、マンスリーで絞り込むためのものです。</p>
 
     <span class="section-title">そのほか</span>
