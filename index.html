@@ -264,6 +264,7 @@ var DEFAULT_SETTINGS = {
   ]
 };
 var PALETTE = ['#8A93A3', '#B08A6A', '#ACAFD4', '#5A5FAA', '#6DB58A', '#EE9AC0', '#E8C55A', '#E07A7A', '#A48BD6', '#7EC8E8', '#BDB7B0', '#F0A86E'];
+function fillShopping(v) { v = v || {}; return { items: Array.isArray(v.items) ? v.items : [], history: Array.isArray(v.history) ? v.history : [] }; }
 function emptyDay(date) { return { date: date, events: [], tasks: [], actuals: [], wake: null, bed: null, note: '', workOff: null, steps: null }; }
 function fillSettings(s) {
   var d = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -325,7 +326,7 @@ function useStore() {
 
   function goLocal() {
     var saved = lsGet() || {};
-    setState({ mode: 'local', settings: fillSettings(saved.settings), days: saved.days || {}, inbox: saved.inbox || [], error: '', user: null });
+    setState({ mode: 'local', settings: fillSettings(saved.settings), days: saved.days || {}, inbox: saved.inbox || [], shopping: fillShopping(saved.shopping), error: '', user: null });
   }
   useEffect(function () {
     if (wantLocal() || !FB_READY) {
@@ -339,14 +340,15 @@ function useStore() {
       var col = fbDb.collection('users').doc(user.uid).collection('data');
       ref.current.col = col;
       ref.current.unsub = col.onSnapshot(function (snap) {
-        var days = {}, settings = null, inbox = [];
+        var days = {}, settings = null, inbox = [], shopping = null;
         snap.docs.forEach(function (d) {
           var v = d.data(); if (!v) return;
           if (d.id === 'settings') settings = v;
           else if (d.id === 'inbox') inbox = Array.isArray(v.items) ? v.items : [];
+          else if (d.id === 'shopping') shopping = v;
           else if (d.id.indexOf('d-') === 0) days[d.id.slice(2)] = v;
         });
-        setState({ mode: 'db', settings: fillSettings(settings), days: days, inbox: inbox, error: '', user: { name: user.displayName || '', email: user.email || '' } });
+        setState({ mode: 'db', settings: fillSettings(settings), days: days, inbox: inbox, shopping: fillShopping(shopping), error: '', user: { name: user.displayName || '', email: user.email || '' } });
       }, function (err) {
         setState(function (s) { return Object.assign({}, s, { mode: s.mode === 'loading' ? 'signin' : s.mode, error: 'データを読み込めませんでした（' + ((err && err.code) || 'エラー') + '）。Firebaseのルール設定を確認してください。' }); });
       });
@@ -354,7 +356,16 @@ function useStore() {
     return function () { offAuth(); if (ref.current.unsub) ref.current.unsub(); };
   }, []);
 
-  function persistLocal(next) { lsSet({ settings: next.settings, days: next.days, inbox: next.inbox || [] }); }
+  function persistLocal(next) { lsSet({ settings: next.settings, days: next.days, inbox: next.inbox || [], shopping: fillShopping(next.shopping) }); }
+  function setShopping(updater) {
+    setState(function (s) {
+      var copy = JSON.parse(JSON.stringify(fillShopping(s.shopping)));
+      var sh = updater(copy) || copy;
+      var next = Object.assign({}, s, { shopping: sh });
+      if (s.mode === 'db') write('shopping', sh); else persistLocal(next);
+      return next;
+    });
+  }
   function setInbox(updater) {
     setState(function (s) {
       var copy = JSON.parse(JSON.stringify(s.inbox || []));
@@ -393,10 +404,11 @@ function useStore() {
   }
   function importAll(data) {
     setState(function (s) {
-      var next = Object.assign({}, s, { settings: fillSettings(data.settings), days: data.days || {}, inbox: data.inbox || [] });
+      var next = Object.assign({}, s, { settings: fillSettings(data.settings), days: data.days || {}, inbox: data.inbox || [], shopping: fillShopping(data.shopping || s.shopping) });
       if (s.mode === 'db') {
         write('settings', next.settings);
         write('inbox', { items: next.inbox });
+        write('shopping', next.shopping);
         Object.keys(next.days).forEach(function (k) { write('d-' + k, next.days[k]); });
       } else persistLocal(next);
       return next;
@@ -414,7 +426,7 @@ function useStore() {
   function useLocalOnly() { setWantLocal(true); goLocal(); }
   function useCloud() { setWantLocal(false); location.reload(); }
   function clearError() { setState(function (s) { return Object.assign({}, s, { error: '' }); }); }
-  return { state: state, setDay: setDay, setSettings: setSettings, setInbox: setInbox, importAll: importAll, clearError: clearError, signIn: signIn, signOut: signOut, useLocalOnly: useLocalOnly, useCloud: useCloud };
+  return { state: state, setDay: setDay, setSettings: setSettings, setInbox: setInbox, setShopping: setShopping, importAll: importAll, clearError: clearError, signIn: signIn, signOut: signOut, useLocalOnly: useLocalOnly, useCloud: useCloud };
 }
 
 
@@ -690,6 +702,7 @@ function Home(props) {
         <div class="bar"><div style=${'width:' + (stats.total ? stats.done / stats.total * 100 : 0) + '%'}></div></div>
         <span class="muted" style="font-size:11px">家事 ${stats.choreDone}/${stats.choreTotal}・ToDo ${stats.todoDone}/${stats.todoTotal}</span>
         ${(s.inbox || []).filter(function (x) { return !x.done; }).length > 0 && html`<span class="muted" style="font-size:11px">いつかやる ${(s.inbox || []).filter(function (x) { return !x.done; }).length}件</span>`}
+        ${fillShopping(s.shopping).items.filter(function (x) { return !x.done; }).length > 0 && html`<span class="muted" style="font-size:11px">買い物 ${fillShopping(s.shopping).items.filter(function (x) { return !x.done; }).length}件</span>`}
       </button>
     </div>
     ${(function () {
@@ -1262,6 +1275,68 @@ function WorkSheet(props) {
 }
 
 /* ---------- ToDo ---------- */
+/* ---------- 買い物リスト ---------- */
+function Shopping(props) {
+  var sh = fillShopping(props.store.state.shopping);
+  var name = useState(''), memo = useState(''), editing = useState(null);
+  var open = sh.items.filter(function (x) { return !x.done; });
+  var bought = sh.items.filter(function (x) { return x.done; }).sort(function (a, b) { return (b.doneAt || 0) - (a.doneAt || 0); });
+  var names = sh.items.map(function (x) { return x.name; });
+  var recent = sh.history.filter(function (n) { return names.indexOf(n) === -1; }).slice(0, 16);
+  function upd(fn) { props.store.setShopping(fn); }
+  function remember(st, n) { st.history = [n].concat(st.history.filter(function (h) { return h !== n; })).slice(0, 40); }
+  function addItem(n, m) {
+    n = (n || '').trim(); if (!n) return false;
+    upd(function (st) { st.items.push({ id: uid(), name: n, memo: (m || '').trim(), done: false, doneAt: null, createdAt: Date.now() }); remember(st, n); return st; });
+    return true;
+  }
+  function add() { if (addItem(name[0], memo[0])) { name[1](''); memo[1](''); var el = document.getElementById('shop-name'); if (el) el.focus(); } }
+  function toggle(x) { var on = !x.done; upd(function (st) { st.items.forEach(function (i) { if (i.id === x.id) { i.done = on; i.doneAt = on ? Date.now() : null; } }); return st; }); }
+  function remove(x) { upd(function (st) { st.items = st.items.filter(function (i) { return i.id !== x.id; }); return st; }); }
+  function clearBought() { var n = bought.length; upd(function (st) { st.items = st.items.filter(function (i) { return !i.done; }); return st; }); props.toast(n + '件を消しました'); }
+  function saveEdit() {
+    var e = editing[0], n = e.name.trim(); if (!n) return;
+    upd(function (st) { st.items.forEach(function (i) { if (i.id === e.id) { i.name = n; i.memo = e.memo.trim(); } }); remember(st, n); return st; });
+    editing[1](null);
+  }
+  function row(x) {
+    if (editing[0] && editing[0].id === x.id) {
+      var e = editing[0];
+      return html`<div class="item" style="flex-direction:column;align-items:stretch;gap:8px">
+        <label class="sr" for="shop-edit-name">品名</label>
+        <input id="shop-edit-name" class="input" value=${e.name} onInput=${function (ev) { editing[1](Object.assign({}, e, { name: ev.target.value })); }} />
+        <label class="sr" for="shop-edit-memo">メモ</label>
+        <input id="shop-edit-memo" class="input" value=${e.memo} placeholder="数・お店など" onInput=${function (ev) { editing[1](Object.assign({}, e, { memo: ev.target.value })); }} onKeyDown=${function (ev) { if (ev.key === 'Enter' && !ev.isComposing) saveEdit(); }} />
+        <div class="btns"><button class="btn sub" onClick=${function () { remove(x); editing[1](null); }}>削除</button><button class="btn sub" onClick=${function () { editing[1](null); }}>やめる</button><button class="btn" onClick=${saveEdit}>保存</button></div>
+      </div>`;
+    }
+    return html`<div class=${'item' + (x.done ? ' done' : '')} style="--c:var(--accent)">
+      <button class=${'box' + (x.done ? ' on' : '')} style="padding:0" aria-label=${x.name + (x.done ? 'をまだ買っていないに戻す' : 'を買った')} aria-pressed=${String(!!x.done)} onClick=${function () { toggle(x); }}>${x.done ? '✓' : ''}</button>
+      <button class="grow" style="border:none;background:none;padding:0;text-align:left" onClick=${function () { editing[1]({ id: x.id, name: x.name, memo: x.memo || '' }); }}>
+        <span class="title" style=${x.done ? 'text-decoration:line-through;color:var(--muted)' : ''}>${x.name}</span>${x.memo && html`<span class="sub">${x.memo}</span>`}
+      </button>
+      <button class="stepper" aria-label=${x.name + 'を削除'} style="color:var(--muted)" onClick=${function () { remove(x); }}>×</button>
+    </div>`;
+  }
+  return html`
+    <div class="card" style="gap:8px">
+      <div class="row" style="gap:8px">
+        <label class="sr" for="shop-name">買うもの</label>
+        <input id="shop-name" class="input" style="flex-grow:1;min-width:0" value=${name[0]} placeholder="買うもの（例：牛乳）" onInput=${function (e) { name[1](e.target.value); }} onKeyDown=${function (e) { if (e.key === 'Enter' && !e.isComposing) add(); }} />
+        <button class="btn small" style="padding:10px 14px;border-radius:10px;white-space:nowrap;flex:none" onClick=${add}>追加</button>
+      </div>
+      <label class="sr" for="shop-memo">メモ</label>
+      <input id="shop-memo" class="input" value=${memo[0]} placeholder="メモ（数・お店など。なくてもOK）" onInput=${function (e) { memo[1](e.target.value); }} onKeyDown=${function (e) { if (e.key === 'Enter' && !e.isComposing) add(); }} />
+    </div>
+    ${recent.length > 0 && html`<div class="stack" style="gap:6px"><span class="label">前に買ったもの（押すと追加）</span>
+      <div class="chips">${recent.map(function (n) { return html`<button class="chip" onClick=${function () { addItem(n, ''); props.toast('「' + n + '」を追加しました'); }}>＋ ${n}</button>`; })}</div></div>`}
+    <span class="section-title">買うもの${open.length ? '（' + open.length + '件）' : ''}</span>
+    <div class="stack">${open.length ? open.map(row) : html`<div class="card"><div class="empty"><span>買うものはありません。上の欄から追加できます。</span></div></div>`}</div>
+    ${bought.length > 0 && html`<div class="between"><span class="section-title" style="margin:0">買ったもの（${bought.length}件）</span>
+      <button class="btn small ghost" style="padding:4px 12px" onClick=${clearBought}>まとめて消す</button></div>
+      <div class="stack">${bought.map(row)}</div>`}
+    <p class="muted" style="font-size:11px;margin:0">チェックすると「買ったもの」に移ります。品名を押すと名前やメモを直せます。一度入れたものは「前に買ったもの」から1回で追加できます。</p>`;
+}
 function Todo(props) {
   var s = props.store.state, settings = s.settings, cm = catMap(settings);
   var date = props.date, day = getDay(s.days, date);
@@ -1316,7 +1391,8 @@ function Todo(props) {
   var chores = day.tasks.filter(function (t) { return t.kind === 'chore'; }).sort(function (a, b) { return (a.start || '99') < (b.start || '99') ? -1 : 1; });
   var todos = day.tasks.filter(function (t) { return t.kind !== 'chore'; }).sort(function (a, b) { return (a.start || '99') < (b.start || '99') ? -1 : 1; });
   var body;
-  if (props.sub === 'plan') {
+  if (props.sub === 'shop') { /* 下で作る */ }
+  else if (props.sub === 'plan') {
     body = html`
       <div class="card" style="flex-direction:row;align-items:center;gap:14px">
         <${Ring} done=${st.done} total=${st.total} />
@@ -1376,9 +1452,11 @@ function Todo(props) {
           <button class="btn small sub" style="border:1.5px solid var(--line)" onClick=${function () { postpone(t); }}>明日に回す</button></div>`;
       })}</div>`}`;
   }
+  if (props.sub === 'shop') body = html`<${Shopping} store=${props.store} toast=${props.toast} />`;
   return html`<div class="app">
-    <${DateNav} date=${date} onChange=${props.setDate} onGear=${props.onGear} />
-    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['plan', '予定'], ['done', '実績']]} />
+    ${props.sub === 'shop' ? html`<div class="top"><span class="title" style="font-size:22px">買い物リスト</span><${Gear} onClick=${props.onGear} /></div>`
+      : html`<${DateNav} date=${date} onChange=${props.setDate} onGear=${props.onGear} />`}
+    <${Seg} label="表示" value=${props.sub} onChange=${props.setSub} options=${[['plan', '予定'], ['done', '実績'], ['shop', '買い物']]} />
     ${body}
     ${props.sub === 'plan' && html`<button class="fab" aria-label="家事・ToDoを追加" onClick=${function () { props.openTask(date, null); }}>${I.plus}</button>`}
   </div>`;
@@ -1908,7 +1986,7 @@ function Settings(props) {
     return [(names.length ? names.join('・') : 'なし') + 'とだけOK', 'part'];
   }
   function exportData() {
-    var data = JSON.stringify({ app: 'schedule-book', version: 1, exportedAt: new Date().toISOString(), settings: settings, days: s.days, inbox: s.inbox || [] }, null, 2);
+    var data = JSON.stringify({ app: 'schedule-book', version: 1, exportedAt: new Date().toISOString(), settings: settings, days: s.days, inbox: s.inbox || [], shopping: fillShopping(s.shopping) }, null, 2);
     try {
       var blob = new Blob([data], { type: 'application/json' });
       var a = document.createElement('a');
